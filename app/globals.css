@@ -1,26 +1,93 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* Colors */
+  --color-orange: 255, 89, 73;
+  --color-white: 255, 255, 255;
+  --color-grey-50: 240, 239, 235;
+  --color-grey-300: 115, 112, 116;
+  --color-grey-500: 46, 41, 48;
+  --color-grey-700: 33, 29, 34;
+  --color-grey-800: 25, 23, 26;
+  --color-grey-900: 19, 17, 20;
+  --color-black: 12, 11, 17;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Semantic tokens */
+  --bg-primary: rgb(var(--color-black));
+  --bg-surface: rgb(var(--color-grey-900));
+  --bg-elevated: rgb(var(--color-grey-800));
+  --accent: rgb(var(--color-orange));
+  --accent-green: #00FF94;
+  --accent-red: #FF3B5C;
+  --text-primary: rgb(var(--color-grey-50));
+  --text-muted: rgb(var(--color-grey-300));
+  --border: rgba(255, 255, 255, 0.06);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Typography */
+  --body-letter-spacing: -0.015em;
+
+  /* Easing */
+  --ease: cubic-bezier(.53, 0, 0, 1);
+  --ease-link: cubic-bezier(.4, 0, .25, 1);
+
+  /* Grid */
+  --grid-gutter: 1.25rem;
+  --grid-margin: 1.25rem;
+  --grid-columns: 12;
+
+  /* Border radius */
+  --border-radius: 0.1875rem;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono), monospace;
+  letter-spacing: var(--body-letter-spacing);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  color: var(--accent);
+  background: rgb(var(--color-black));
+}
+
+/* Tailwind v4 token exposure — replaces the role of tailwind.config.ts.
+   Maps semantic CSS vars to Tailwind utilities:
+   bg-bg-primary, bg-bg-surface, bg-bg-elevated, bg-accent,
+   text-text-primary, text-text-muted, text-accent,
+   rounded (uses --border-radius), ease-brand, ease-link */
+@theme inline {
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-accent: var(--accent);
+  --color-accent-green: var(--accent-green);
+  --color-accent-red: var(--accent-red);
+  --color-text-primary: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+
+  --radius: var(--border-radius);
+
+  --ease-brand: cubic-bezier(.53, 0, 0, 1);
+  --ease-link: cubic-bezier(.4, 0, .25, 1);
+}
+
+@keyframes live-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+}
+
+.live-dot {
+  animation: live-pulse 1.6s var(--ease) infinite;
 }
