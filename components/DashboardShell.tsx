@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import DetailPanel from "@/components/DetailPanel";
+import EarningsStrip from "@/components/EarningsStrip";
 import IndicesStrip from "@/components/IndicesStrip";
 import PortfolioTracker from "@/components/PortfolioTracker";
 import StockChart from "@/components/StockChart";
@@ -247,6 +248,7 @@ export default function DashboardShell() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg-primary text-text-primary">
       <Header />
+      <EarningsStrip />
       <div className="flex flex-1 overflow-hidden">
         <aside
           className="flex h-full w-[260px] shrink-0 flex-col bg-bg-surface"
