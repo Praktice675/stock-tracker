@@ -4,6 +4,7 @@ import AddTransactionDialog from "@/components/portfolio/AddTransactionDialog";
 import AllocationChart from "@/components/portfolio/AllocationChart";
 import HoldingsTable from "@/components/portfolio/HoldingsTable";
 import MetricsStrip from "@/components/portfolio/MetricsStrip";
+import PortfolioChart from "@/components/portfolio/PortfolioChart";
 import PortfolioEmpty from "@/components/portfolio/PortfolioEmpty";
 import TransactionsList from "@/components/portfolio/TransactionsList";
 import { getPortfolioData } from "@/lib/portfolio/compute";
@@ -51,6 +52,10 @@ export default async function PortfolioPage() {
             </div>
 
             <MetricsStrip totals={data.totals} />
+
+            <div style={{ marginTop: "24px" }}>
+              <PortfolioChart hasTransactions={data.hasAnyTransaction} />
+            </div>
 
             <div
               className="grid"

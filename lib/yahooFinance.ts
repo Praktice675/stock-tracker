@@ -175,3 +175,99 @@ export async function fetchYahooCandles(
     return null;
   }
 }
+
+export type YahooNewsItem = {
+  uuid: string;
+  title: string;
+  publisher: string;
+  link: string;
+  providerPublishTime: number; // Unix seconds
+  relatedTickers: string[];
+  summary?: string;
+};
+
+// Yahoo search() returns a `news` array per query. Map and clean for our
+// shape; return [] on error so the caller can keep aggregating.
+export async function fetchYahooNewsForTicker(
+  ticker: string,
+  count: number = 10,
+): Promise<YahooNewsItem[]> {
+  try {
+    const result = await yahooFinance.search(ticker, {
+      newsCount: count,
+      quotesCount: 0,
+    });
+    const news = (result as { news?: unknown[] })?.news ?? [];
+    const items: YahooNewsItem[] = [];
+    for (const raw of news) {
+      const n = raw as Record<string, unknown>;
+      const title = typeof n.title === "string" ? n.title : null;
+      const link = typeof n.link === "string" ? n.link : null;
+      if (!title || !link) continue;
+
+      // providerPublishTime can be a Unix-seconds number or a Date.
+      let time: number | null = null;
+      const t = n.providerPublishTime;
+      if (typeof t === "number" && Number.isFinite(t)) time = t;
+      else if (t instanceof Date) time = Math.floor(t.getTime() / 1000);
+      if (time == null) continue;
+
+      const relatedTickers = Array.isArray(n.relatedTickers)
+        ? (n.relatedTickers as unknown[]).filter(
+            (x): x is string => typeof x === "string",
+          )
+        : [];
+
+      items.push({
+        uuid: typeof n.uuid === "string" && n.uuid.length > 0 ? n.uuid : link,
+        title,
+        publisher: typeof n.publisher === "string" ? n.publisher : "",
+        link,
+        providerPublishTime: time,
+        relatedTickers,
+        summary: typeof n.summary === "string" ? n.summary : undefined,
+      });
+    }
+    items.sort((a, b) => b.providerPublishTime - a.providerPublishTime);
+    return items;
+  } catch (err) {
+    console.warn(
+      `fetchYahooNewsForTicker(${ticker}) failed:`,
+      err instanceof Error ? err.message : err,
+    );
+    return [];
+  }
+}
+
+// Daily closes between two dates, inclusive of both ends Yahoo provides.
+// Used by the portfolio history compute; returns null on error so callers
+// can degrade gracefully.
+export async function fetchHistoricalCloses(
+  ticker: string,
+  fromDate: Date,
+  toDate: Date,
+): Promise<{ date: string; close: number }[] | null> {
+  try {
+    const result = await yahooFinance.chart(ticker, {
+      period1: fromDate,
+      period2: toDate,
+      interval: "1d",
+    });
+    const quotes = result?.quotes ?? [];
+    const out: { date: string; close: number }[] = [];
+    for (const q of quotes) {
+      if (!q?.date || q.close == null) continue;
+      const d = q.date instanceof Date ? q.date : new Date(q.date);
+      if (Number.isNaN(d.getTime())) continue;
+      out.push({ date: isoDate(d), close: Number(q.close) });
+    }
+    out.sort((a, b) => a.date.localeCompare(b.date));
+    return out;
+  } catch (err) {
+    console.warn(
+      `fetchHistoricalCloses ${ticker} failed:`,
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
+}
