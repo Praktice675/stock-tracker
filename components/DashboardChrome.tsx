@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
+import ChatLauncher from "@/components/chat/ChatLauncher";
 import DashboardTabs from "@/components/DashboardTabs";
 import DashboardUserMenu from "@/components/DashboardUserMenu";
 import EarningsStrip from "@/components/EarningsStrip";
@@ -18,6 +19,7 @@ export default function DashboardChrome({ user, children }: Props) {
       <ChromeHeader email={user.email ?? null} />
       <EarningsStrip />
       <div className="flex flex-1 overflow-hidden">{children}</div>
+      <ChatLauncher />
     </div>
   );
 }
