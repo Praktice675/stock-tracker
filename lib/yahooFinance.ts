@@ -13,6 +13,7 @@ export type YahooQuote = {
   changePercent: number;
   volume: number;
   previousClose: number;
+  name: string | null;
 };
 
 export type YahooCandle = {
@@ -79,6 +80,7 @@ export async function fetchYahooQuote(
       changePercent: q.regularMarketChangePercent ?? 0,
       volume: q.regularMarketVolume ?? 0,
       previousClose: q.regularMarketPreviousClose ?? q.regularMarketPrice,
+      name: q.shortName ?? q.longName ?? null,
     };
   } catch (err) {
     console.warn(

@@ -67,9 +67,15 @@ export default function EarningsStrip() {
 
       await loadEarnings();
 
-      // Server-side filter so we only receive events for this user's rows.
+      // Unique channel per mount — supabase.channel(name) returns the
+      // existing channel for a repeated name, and calling .on() on an
+      // already-subscribed channel throws. React 18 strict mode + fast
+      // refresh both re-run this effect, so a stable name causes that
+      // crash.
+      const nonce = Math.random().toString(36).slice(2, 10);
+      const channelName = `earnings-watchlist-${user.id}-${nonce}`;
       channel = supabase
-        .channel(`earnings-watchlist-${user.id}`)
+        .channel(channelName)
         .on(
           "postgres_changes",
           {
@@ -90,7 +96,11 @@ export default function EarningsStrip() {
     return () => {
       cancelled = true;
       if (channel) {
-        supabase.removeChannel(channel);
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // Channel may already be torn down by a previous cleanup pass.
+        }
       }
     };
   }, []);

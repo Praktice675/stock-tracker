@@ -114,9 +114,11 @@ export async function getPortfolioData(): Promise<PortfolioData> {
     let currentPrice = avgCost;
     let previousClose = avgCost;
     let priceUnavailable = true;
+    let name: string | null = null;
     if (r.status === "fulfilled" && r.value.quote) {
       currentPrice = r.value.quote.price;
       previousClose = r.value.quote.previousClose;
+      name = r.value.quote.name;
       priceUnavailable = false;
     }
 
@@ -132,7 +134,7 @@ export async function getPortfolioData(): Promise<PortfolioData> {
 
     return {
       ticker: pos.ticker,
-      name: null as string | null,
+      name,
       shares: pos.shares,
       avgCost,
       currentPrice,
