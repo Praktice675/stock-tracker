@@ -16,8 +16,8 @@ export default function Hero() {
       gsap.from(".letter", {
         yPercent: 110,
         rotate: 6,
-        duration: 1.2,
-        stagger: 0.05,
+        duration: 0.8,
+        stagger: 0.03,
         ease: "expo.out",
         delay: 0.2,
       });

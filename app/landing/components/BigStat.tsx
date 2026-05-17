@@ -29,7 +29,7 @@ export default function BigStat() {
             start: "top top",
             end: "+=80%",
             pin: true,
-            scrub: 0.5,
+            scrub: true,
           },
         });
 

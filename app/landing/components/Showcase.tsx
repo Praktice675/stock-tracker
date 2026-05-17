@@ -68,7 +68,7 @@ export default function Showcase() {
             start: "top top",
             end: "+=100%",
             pin: true,
-            scrub: 0.5,
+            scrub: true,
           },
         });
 

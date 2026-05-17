@@ -41,7 +41,7 @@ export default function Features() {
           start: "top top",
           end: "+=120%",
           pin: true,
-          scrub: 0.5,
+          scrub: true,
           onUpdate: (self) => {
             const i = Math.min(2, Math.floor(self.progress * 3));
             setActiveFeature(i);
