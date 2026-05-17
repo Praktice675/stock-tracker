@@ -4,6 +4,7 @@ import Nav from "./components/Nav";
 import Hero from "./components/Hero";
 import MarketClocks from "./components/MarketClocks";
 import Showcase from "./components/Showcase";
+import TradingDay from "./components/TradingDay";
 import Features from "./components/Features";
 import BigStat from "./components/BigStat";
 import CTA from "./components/CTA";
@@ -16,6 +17,7 @@ export default function LandingPage() {
       <Hero />
       <MarketClocks />
       <Showcase />
+      <TradingDay />
       <Features />
       <BigStat />
       <CTA />
