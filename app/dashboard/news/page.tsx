@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
 import DashboardChrome from "@/components/DashboardChrome";
-import DashboardShell from "@/components/DashboardShell";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function DashboardPage() {
+export default async function NewsPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -15,7 +14,11 @@ export default async function DashboardPage() {
 
   return (
     <DashboardChrome user={user}>
-      <DashboardShell />
+      <div className="flex w-full items-center justify-center" style={{ minHeight: "60vh" }}>
+        <p className="text-neutral-500 text-sm uppercase tracking-wider">
+          News coming soon
+        </p>
+      </div>
     </DashboardChrome>
   );
 }

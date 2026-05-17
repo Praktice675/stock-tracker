@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import DetailPanel from "@/components/DetailPanel";
-import EarningsStrip from "@/components/EarningsStrip";
-import IndicesStrip from "@/components/IndicesStrip";
-import PortfolioTracker from "@/components/PortfolioTracker";
+// PortfolioTracker is staying imported for Phase 2 (dashboard/portfolio page).
+// Intentionally unused here — the dashboard/portfolio route owns it next phase.
+// import PortfolioTracker from "@/components/PortfolioTracker";
 import StockChart from "@/components/StockChart";
 import Watchlist from "@/components/Watchlist";
 import {
@@ -15,8 +14,6 @@ import {
   removeFromWatchlist as dbRemoveFromWatchlist,
 } from "@/lib/db/watchlist";
 import { createClient } from "@/lib/supabase/client";
-
-type SidebarTab = "watchlist" | "portfolio";
 
 type WatchlistEntry = { ticker: string; name: string };
 
@@ -47,8 +44,11 @@ export default function DashboardShell() {
   const [authLoaded, setAuthLoaded] = useState(false);
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>(DEFAULT_WATCHLIST);
   const [selectedTicker, setSelectedTicker] = useState("AAPL");
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("watchlist");
   const hydratedRef = useRef(false);
+  // `authLoaded` is wired through the existing init flow; it's no longer
+  // surfaced as a prop here, but kept so the localStorage / DB sync logic
+  // can still react to auth changes the same way it did before.
+  void authLoaded;
 
   // Track current user (initial fetch + auth state subscription).
   useEffect(() => {
@@ -246,172 +246,41 @@ export default function DashboardShell() {
   );
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg-primary text-text-primary">
-      <Header />
-      <EarningsStrip />
-      <div className="flex flex-1 overflow-hidden">
-        <aside
-          className="flex h-full w-[260px] shrink-0 flex-col bg-bg-surface"
-          style={{ borderRight: "1px solid var(--border)" }}
-          aria-label="Sidebar"
-        >
-          <SidebarTabs active={sidebarTab} onChange={setSidebarTab} />
-          <div className="flex min-h-0 flex-1 flex-col">
-            {sidebarTab === "watchlist" ? (
-              <Watchlist
-                selectedTicker={selectedTicker}
-                onSelect={setSelectedTicker}
-                watchlist={watchlist}
-                onAddToWatchlist={handleAddToWatchlist}
-                onRemoveFromWatchlist={handleRemoveFromWatchlist}
-              />
-            ) : (
-              <PortfolioTracker
-                selectedTicker={selectedTicker}
-                onSelect={setSelectedTicker}
-                user={user}
-                authLoaded={authLoaded}
-              />
-            )}
-          </div>
-        </aside>
-
-        <main
-          className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg-primary"
-          style={{ height: "100%" }}
-        >
-          <StockChart selectedTicker={selectedTicker} />
-        </main>
-
-        <aside
-          className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto bg-bg-surface [&::-webkit-scrollbar]:hidden"
-          style={{
-            borderLeft: "1px solid var(--border)",
-            scrollbarWidth: "none",
-          }}
-          aria-label="Detail panel"
-        >
-          <DetailPanel selectedTicker={selectedTicker} />
-        </aside>
-      </div>
-    </div>
-  );
-}
-
-function SidebarTabs({
-  active,
-  onChange,
-}: {
-  active: SidebarTab;
-  onChange: (t: SidebarTab) => void;
-}) {
-  return (
-    <div
-      className="flex shrink-0"
-      style={{ borderBottom: "1px solid var(--border)" }}
-    >
-      <TabButton
-        active={active === "watchlist"}
-        onClick={() => onChange("watchlist")}
+    <div className="flex w-full flex-1 overflow-hidden">
+      <aside
+        className="flex h-full w-[260px] shrink-0 flex-col bg-bg-surface"
+        style={{ borderRight: "1px solid var(--border)" }}
+        aria-label="Watchlist"
       >
-        Watchlist
-      </TabButton>
-      <TabButton
-        active={active === "portfolio"}
-        onClick={() => onChange("portfolio")}
-      >
-        Portfolio
-      </TabButton>
-    </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center justify-center font-mono uppercase transition-colors duration-150 ease-brand ${
-        active ? "" : "text-text-muted hover:text-text-primary"
-      }`}
-      style={{
-        flex: "1 1 50%",
-        height: "36px",
-        marginBottom: "-1px", // overlap the strip's 1px border with our 2px band
-        background: "transparent",
-        border: "none",
-        borderBottom: active
-          ? "2px solid rgb(var(--color-orange))"
-          : "2px solid transparent",
-        fontSize: "10px",
-        letterSpacing: "0.15em",
-        color: active ? "var(--text-primary)" : undefined,
-        cursor: "pointer",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Header() {
-  return (
-    <header
-      className="flex h-[65px] w-full shrink-0 items-center justify-between px-6"
-      style={{
-        backgroundColor: "rgb(var(--color-orange))",
-        borderBottom: "1px solid var(--border)",
-        color: "rgb(var(--color-black))",
-      }}
-    >
-      <div className="flex items-center gap-4">
-        <Link
-          href="/"
-          className="font-mono font-bold uppercase transition-opacity hover:opacity-70"
-          style={{
-            fontSize: "11px",
-            letterSpacing: "0.3em",
-            color: "rgb(var(--color-black))",
-            textDecoration: "none",
-          }}
-        >
-          ← Pulse
-        </Link>
-        <span
-          aria-hidden="true"
-          style={{
-            width: "1px",
-            height: "14px",
-            backgroundColor: "rgba(0, 0, 0, 0.25)",
-          }}
-        />
-        <div className="flex items-center gap-3">
-          <span
-            className="live-dot inline-block h-2 w-2 rounded-full"
-            style={{ backgroundColor: "rgb(var(--color-black))" }}
-            aria-hidden="true"
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Watchlist
+            selectedTicker={selectedTicker}
+            onSelect={setSelectedTicker}
+            watchlist={watchlist}
+            onAddToWatchlist={handleAddToWatchlist}
+            onRemoveFromWatchlist={handleRemoveFromWatchlist}
           />
-          <span
-            className="text-sm font-semibold uppercase"
-            style={{
-              letterSpacing: "0.25em",
-              color: "rgb(var(--color-black))",
-            }}
-          >
-            Market
-          </span>
         </div>
-      </div>
+      </aside>
 
-      <IndicesStrip />
-    </header>
+      <main
+        className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg-primary"
+        style={{ height: "100%" }}
+      >
+        <StockChart selectedTicker={selectedTicker} />
+      </main>
+
+      <aside
+        className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto bg-bg-surface [&::-webkit-scrollbar]:hidden"
+        style={{
+          borderLeft: "1px solid var(--border)",
+          scrollbarWidth: "none",
+        }}
+        aria-label="Detail panel"
+      >
+        <DetailPanel selectedTicker={selectedTicker} />
+      </aside>
+    </div>
   );
 }
+
