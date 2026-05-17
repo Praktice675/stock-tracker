@@ -1,37 +1,29 @@
 "use client";
 
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import {
+  addTransaction,
+  computePositions,
+  deletePositionByTicker,
+  getTransactions,
+  type Position as DbPosition,
+} from "@/lib/db/portfolio";
 
-type StoredPosition = {
+type EnrichedPosition = {
   ticker: string;
   name: string;
   shares: number;
   avgCost: number;
-};
-
-type Position = StoredPosition & {
   currentPrice: number | null;
   currentValue: number | null;
   gainLoss: number | null;
   gainLossPercent: number | null;
 };
 
-const STORAGE_KEY = "portfolio";
-
 const POSITIVE = "#00FF94";
 const NEGATIVE = "#FF3B5C";
 const PLACEHOLDER = "—";
-
-function isStoredPosition(v: unknown): v is StoredPosition {
-  if (typeof v !== "object" || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return (
-    typeof o.ticker === "string" &&
-    typeof o.name === "string" &&
-    typeof o.shares === "number" &&
-    typeof o.avgCost === "number"
-  );
-}
 
 function formatMoney(n: number): string {
   const sign = n < 0 ? "-" : "";
@@ -61,49 +53,55 @@ function formatSignedMoney(n: number): string {
 type Props = {
   selectedTicker: string;
   onSelect: (ticker: string) => void;
+  user: User | null;
+  authLoaded: boolean;
 };
 
-export default function PortfolioTracker({ selectedTicker, onSelect }: Props) {
-  const [positions, setPositions] = useState<StoredPosition[]>([]);
+export default function PortfolioTracker({
+  selectedTicker,
+  onSelect,
+  user,
+  authLoaded,
+}: Props) {
+  const [positions, setPositions] = useState<DbPosition[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
   const [quotes, setQuotes] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(false);
 
   const [tickerInput, setTickerInput] = useState("");
   const [sharesInput, setSharesInput] = useState("");
   const [avgCostInput, setAvgCostInput] = useState("");
 
-  const hydratedRef = useRef(false);
   const cancelledRef = useRef(false);
   const positionsRef = useRef(positions);
   positionsRef.current = positions;
 
-  // Load from localStorage once
-  useEffect(() => {
+  const refresh = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.every(isStoredPosition)) {
-          setPositions(parsed);
-        }
-      }
+      const txs = await getTransactions();
+      const pos = computePositions(txs);
+      setPositions(pos);
     } catch (err) {
-      console.warn("Failed to load portfolio:", err);
+      console.warn("Failed to load transactions:", err);
+    } finally {
+      setLoading(false);
     }
-    hydratedRef.current = true;
-  }, []);
+  }, [user]);
 
-  // Persist on change (skips the initial empty render)
+  // Initial load + reload when user changes (sign in / out).
   useEffect(() => {
-    if (!hydratedRef.current) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(positions));
-    } catch (err) {
-      console.warn("Failed to save portfolio:", err);
+    if (!authLoaded) return;
+    if (!user) {
+      setPositions([]);
+      return;
     }
-  }, [positions]);
+    refresh();
+  }, [authLoaded, user, refresh]);
 
   // Fetch every position's quote in parallel
-  const fetchAllQuotes = async () => {
+  const fetchAllQuotes = useCallback(async () => {
     const list = positionsRef.current;
     if (list.length === 0) return;
     const results = await Promise.all(
@@ -131,10 +129,11 @@ export default function PortfolioTracker({ selectedTicker, onSelect }: Props) {
       }
       return next;
     });
-  };
+  }, []);
 
-  // Initial fetch + 60s poll
+  // Initial fetch + 60s poll (logged-in only)
   useEffect(() => {
+    if (!user) return;
     cancelledRef.current = false;
     fetchAllQuotes();
     const id = setInterval(fetchAllQuotes, 60_000);
@@ -142,16 +141,15 @@ export default function PortfolioTracker({ selectedTicker, onSelect }: Props) {
       cancelledRef.current = true;
       clearInterval(id);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user, fetchAllQuotes]);
 
-  // When a new ticker is added via the form, fetch its quote immediately
-  // (without waiting for the next 60s tick).
-  const fetchedTickersRef = useRef<Set<string>>(new Set());
+  // When a new ticker appears, fetch its quote + name immediately.
+  const fetchedQuoteRef = useRef<Set<string>>(new Set());
+  const fetchedNameRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     for (const p of positions) {
-      if (!fetchedTickersRef.current.has(p.ticker)) {
-        fetchedTickersRef.current.add(p.ticker);
+      if (!fetchedQuoteRef.current.has(p.ticker)) {
+        fetchedQuoteRef.current.add(p.ticker);
         fetch(`/api/quote/${p.ticker}`, { cache: "no-store" })
           .then((r) => (r.ok ? r.json() : null))
           .then((json) => {
@@ -161,21 +159,46 @@ export default function PortfolioTracker({ selectedTicker, onSelect }: Props) {
           })
           .catch(() => {});
       }
-    }
-  }, [positions]);
 
-  // Enrich positions with live values
-  const enriched: Position[] = positions.map((p) => {
+      if (!fetchedNameRef.current.has(p.ticker) && !names[p.ticker]) {
+        fetchedNameRef.current.add(p.ticker);
+        fetch(`/api/search?q=${encodeURIComponent(p.ticker)}`)
+          .then((r) => (r.ok ? r.json() : []))
+          .then((results) => {
+            if (!Array.isArray(results)) return;
+            const exact = results.find(
+              (r: { ticker?: string }) => r.ticker === p.ticker,
+            );
+            const match = exact || results[0];
+            if (!match?.name) return;
+            setNames((prev) => ({ ...prev, [p.ticker]: match.name }));
+          })
+          .catch(() => {});
+      }
+    }
+  }, [positions, names]);
+
+  // Enrich positions with name + live values
+  const enriched: EnrichedPosition[] = positions.map((p) => {
     const currentPrice = quotes[p.ticker] ?? null;
     const currentValue =
       currentPrice != null ? currentPrice * p.shares : null;
-    const costBasis = p.avgCost * p.shares;
+    const costBasis = p.avg_cost * p.shares;
     const gainLoss = currentValue != null ? currentValue - costBasis : null;
     const gainLossPercent =
-      currentPrice != null && p.avgCost > 0
-        ? ((currentPrice - p.avgCost) / p.avgCost) * 100
+      currentPrice != null && p.avg_cost > 0
+        ? ((currentPrice - p.avg_cost) / p.avg_cost) * 100
         : null;
-    return { ...p, currentPrice, currentValue, gainLoss, gainLossPercent };
+    return {
+      ticker: p.ticker,
+      name: names[p.ticker] ?? p.ticker,
+      shares: p.shares,
+      avgCost: p.avg_cost,
+      currentPrice,
+      currentValue,
+      gainLoss,
+      gainLossPercent,
+    };
   });
 
   const totalValue = enriched.reduce(
@@ -188,8 +211,9 @@ export default function PortfolioTracker({ selectedTicker, onSelect }: Props) {
   );
   const hasAnyQuotes = enriched.some((p) => p.currentPrice !== null);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     const ticker = tickerInput.trim().toUpperCase();
     const shares = parseFloat(sharesInput);
     const avgCost = parseFloat(avgCostInput);
@@ -204,45 +228,38 @@ export default function PortfolioTracker({ selectedTicker, onSelect }: Props) {
       return;
     }
 
-    // Optimistic insert: name = ticker, name patched after search lookup
-    setPositions((prev) => {
-      const idx = prev.findIndex((p) => p.ticker === ticker);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], shares, avgCost };
-        return next;
-      }
-      return [...prev, { ticker, name: ticker, shares, avgCost }];
-    });
-
     setTickerInput("");
     setSharesInput("");
     setAvgCostInput("");
 
-    // Background name lookup; patches the row's name when (if) it arrives
-    fetch(`/api/search?q=${encodeURIComponent(ticker)}`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((results) => {
-        if (!Array.isArray(results)) return;
-        const exact = results.find(
-          (r: { ticker?: string }) => r.ticker === ticker,
-        );
-        const match = exact || results[0];
-        if (!match?.name) return;
-        setPositions((prev) =>
-          prev.map((p) =>
-            p.ticker === ticker && p.name === ticker
-              ? { ...p, name: match.name }
-              : p,
-          ),
-        );
-      })
-      .catch(() => {});
+    try {
+      // Submitting "I own N shares at $X avg cost" is recorded as a single
+      // buy transaction. Future per-transaction UI can preserve full history.
+      await addTransaction(ticker, "buy", shares, avgCost);
+      await refresh();
+    } catch (err) {
+      console.warn("Failed to record transaction:", err);
+    }
   };
 
-  const handleRemove = (ticker: string) => {
+  const handleRemove = async (ticker: string) => {
+    if (!user) return;
+    // Optimistic remove for snappy UX
     setPositions((prev) => prev.filter((p) => p.ticker !== ticker));
+    try {
+      await deletePositionByTicker(ticker);
+      await refresh();
+    } catch (err) {
+      console.warn("Failed to delete position:", err);
+      // Reload truth from DB on failure
+      await refresh();
+    }
   };
+
+  // Logged-out gate: don't render the form/positions, just prompt to sign in.
+  if (authLoaded && !user) {
+    return <SignInPrompt />;
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -266,7 +283,7 @@ export default function PortfolioTracker({ selectedTicker, onSelect }: Props) {
         style={{ scrollbarWidth: "none" }}
       >
         {positions.length === 0 ? (
-          <EmptyState />
+          <EmptyState loading={loading && !authLoaded ? false : loading} />
         ) : (
           enriched.map((p) => (
             <PositionCard
@@ -280,6 +297,26 @@ export default function PortfolioTracker({ selectedTicker, onSelect }: Props) {
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+// ------------------ Logged-out prompt ------------------
+
+function SignInPrompt() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <p
+        className="text-text-muted"
+        style={{
+          fontSize: "11px",
+          letterSpacing: "-0.015em",
+          padding: "0 24px",
+          textAlign: "center",
+        }}
+      >
+        Sign in to track your portfolio.
+      </p>
     </div>
   );
 }
@@ -483,7 +520,7 @@ function SummaryCell({
 
 // ------------------ Empty state ------------------
 
-function EmptyState() {
+function EmptyState({ loading }: { loading: boolean }) {
   return (
     <div className="flex h-full items-center justify-center">
       <p
@@ -495,7 +532,7 @@ function EmptyState() {
           textAlign: "center",
         }}
       >
-        Add your first position above
+        {loading ? "Loading…" : "Add your first position above"}
       </p>
     </div>
   );
@@ -510,7 +547,7 @@ function PositionCard({
   onSelect,
   onRemove,
 }: {
-  position: Position;
+  position: EnrichedPosition;
   totalValue: number;
   selected: boolean;
   onSelect: () => void;

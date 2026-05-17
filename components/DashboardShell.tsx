@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import DetailPanel from "@/components/DetailPanel";
 import IndicesStrip from "@/components/IndicesStrip";
 import PortfolioTracker from "@/components/PortfolioTracker";
 import StockChart from "@/components/StockChart";
 import Watchlist from "@/components/Watchlist";
+import {
+  addToWatchlist as dbAddToWatchlist,
+  getWatchlist as dbGetWatchlist,
+  removeFromWatchlist as dbRemoveFromWatchlist,
+} from "@/lib/db/watchlist";
+import { createClient } from "@/lib/supabase/client";
 
 type SidebarTab = "watchlist" | "portfolio";
 
@@ -32,62 +39,209 @@ function isValidEntry(v: unknown): v is WatchlistEntry {
 }
 
 export default function DashboardShell() {
+  const supabase = createClient();
+
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoaded, setAuthLoaded] = useState(false);
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>(DEFAULT_WATCHLIST);
   const [selectedTicker, setSelectedTicker] = useState("AAPL");
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("watchlist");
   const hydratedRef = useRef(false);
 
-  // Load from localStorage once on mount. If the loaded list doesn't
-  // contain our default selectedTicker ("AAPL"), switch to its first entry.
+  // Track current user (initial fetch + auth state subscription).
   useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return;
+      setUser(data.user);
+      setAuthLoaded(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      },
+    );
+    return () => {
+      cancelled = true;
+      listener.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  // Refresh watchlist from DB.
+  const refreshWatchlistFromDb = useCallback(async () => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (
-          Array.isArray(parsed) &&
-          parsed.length > 0 &&
-          parsed.every(isValidEntry)
-        ) {
-          setWatchlist(parsed);
-          if (!parsed.some((s) => s.ticker === "AAPL")) {
-            setSelectedTicker(parsed[0].ticker);
-          }
-        }
+      const items = await dbGetWatchlist();
+      if (items.length === 0) {
+        // Logged in but empty list — keep defaults visible so the dashboard
+        // isn't empty on a brand-new account. Defaults are not persisted.
+        setWatchlist(DEFAULT_WATCHLIST);
+        return;
+      }
+      const entries = items.map((i) => ({ ticker: i.ticker, name: i.name }));
+      setWatchlist(entries);
+      if (!entries.some((e) => e.ticker === selectedTicker)) {
+        setSelectedTicker(entries[0].ticker);
       }
     } catch (err) {
-      console.warn("Failed to load watchlist from localStorage:", err);
+      console.warn("Failed to load watchlist from DB:", err);
     }
-    hydratedRef.current = true;
-  }, []);
+  }, [selectedTicker]);
 
-  // Persist on every change, but only after hydration so we don't
-  // immediately overwrite saved state with the default array.
+  // Silent localStorage → DB migration, then load DB watchlist.
+  // For logged-out visitors: load from localStorage (or keep defaults).
+  useEffect(() => {
+    if (!authLoaded) return;
+
+    let cancelled = false;
+
+    async function init() {
+      if (user) {
+        try {
+          // If user already has rows in DB, just load. Otherwise check for
+          // any localStorage data left from a logged-out session and import.
+          const existing = await dbGetWatchlist();
+          if (existing.length > 0) {
+            if (cancelled) return;
+            const entries = existing.map((i) => ({
+              ticker: i.ticker,
+              name: i.name,
+            }));
+            setWatchlist(entries);
+            if (!entries.some((e) => e.ticker === selectedTicker)) {
+              setSelectedTicker(entries[0].ticker);
+            }
+            hydratedRef.current = true;
+            return;
+          }
+
+          // No DB rows yet — try migrating from localStorage if present.
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            try {
+              const items = JSON.parse(raw) as unknown;
+              if (
+                Array.isArray(items) &&
+                items.length > 0 &&
+                items.every(isValidEntry)
+              ) {
+                const rows = items.map((item, index) => ({
+                  user_id: user!.id,
+                  ticker: item.ticker,
+                  name: item.name,
+                  position: index,
+                }));
+                await supabase.from("watchlist_items").insert(rows);
+                localStorage.removeItem(STORAGE_KEY);
+              }
+            } catch (err) {
+              console.warn("localStorage migration failed:", err);
+            }
+          }
+
+          if (cancelled) return;
+          await refreshWatchlistFromDb();
+          hydratedRef.current = true;
+        } catch (err) {
+          console.warn("Watchlist init (DB) failed:", err);
+          hydratedRef.current = true;
+        }
+        return;
+      }
+
+      // Logged-out: fall back to localStorage (legacy visitor path).
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (
+            Array.isArray(parsed) &&
+            parsed.length > 0 &&
+            parsed.every(isValidEntry)
+          ) {
+            setWatchlist(parsed);
+            if (!parsed.some((s: WatchlistEntry) => s.ticker === selectedTicker)) {
+              setSelectedTicker(parsed[0].ticker);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load watchlist from localStorage:", err);
+      }
+      hydratedRef.current = true;
+    }
+
+    init();
+    return () => {
+      cancelled = true;
+    };
+    // selectedTicker intentionally not in deps — only re-run when auth state changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoaded, user, supabase]);
+
+  // Logged-out localStorage persistence (unchanged from pre-DB behavior).
+  // Logged-in users persist via DB ops; we skip this to avoid stale writes.
   useEffect(() => {
     if (!hydratedRef.current) return;
+    if (user) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
     } catch (err) {
       console.warn("Failed to save watchlist to localStorage:", err);
     }
-  }, [watchlist]);
+  }, [watchlist, user]);
 
-  const handleAddToWatchlist = (stock: WatchlistEntry) => {
-    setWatchlist((prev) =>
-      prev.some((s) => s.ticker === stock.ticker) ? prev : [stock, ...prev],
-    );
-  };
+  const handleAddToWatchlist = useCallback(
+    async (stock: WatchlistEntry) => {
+      // Optimistic update for snappy UI in both modes.
+      setWatchlist((prev) =>
+        prev.some((s) => s.ticker === stock.ticker) ? prev : [stock, ...prev],
+      );
 
-  const handleRemoveFromWatchlist = (ticker: string) => {
-    setWatchlist((prev) => {
-      if (prev.length <= 1) return prev;
-      const next = prev.filter((s) => s.ticker !== ticker);
-      if (selectedTicker === ticker) {
-        setSelectedTicker(next[0].ticker);
+      if (user) {
+        try {
+          await dbAddToWatchlist(stock.ticker, stock.name);
+          await refreshWatchlistFromDb();
+        } catch (err) {
+          console.warn("DB add failed:", err);
+          // Roll back optimistic add on failure.
+          setWatchlist((prev) => prev.filter((s) => s.ticker !== stock.ticker));
+        }
       }
-      return next;
-    });
-  };
+    },
+    [user, refreshWatchlistFromDb],
+  );
+
+  const handleRemoveFromWatchlist = useCallback(
+    async (ticker: string) => {
+      // Snapshot for rollback.
+      const prevSelected = selectedTicker;
+      let removed: WatchlistEntry | undefined;
+
+      setWatchlist((prev) => {
+        if (prev.length <= 1) return prev;
+        removed = prev.find((s) => s.ticker === ticker);
+        const next = prev.filter((s) => s.ticker !== ticker);
+        if (selectedTicker === ticker) {
+          setSelectedTicker(next[0].ticker);
+        }
+        return next;
+      });
+
+      if (user && removed) {
+        try {
+          await dbRemoveFromWatchlist(ticker);
+          await refreshWatchlistFromDb();
+        } catch (err) {
+          console.warn("DB remove failed:", err);
+          setWatchlist((prev) =>
+            prev.some((s) => s.ticker === ticker) ? prev : [removed!, ...prev],
+          );
+          setSelectedTicker(prevSelected);
+        }
+      }
+    },
+    [user, selectedTicker, refreshWatchlistFromDb],
+  );
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg-primary text-text-primary">
@@ -112,6 +266,8 @@ export default function DashboardShell() {
               <PortfolioTracker
                 selectedTicker={selectedTicker}
                 onSelect={setSelectedTicker}
+                user={user}
+                authLoaded={authLoaded}
               />
             )}
           </div>
