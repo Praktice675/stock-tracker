@@ -6,24 +6,27 @@ type Stat = { label: string; value: string };
 type Rating = { label: string; pct: number; color: string };
 type NewsItem = { headline: string; source: string; time: string };
 
-type Fundamentals = {
-  marketCap: number | null;
-  pe: number | null;
-  eps: number | null;
-  revenue: number | null;
-  beta: number | null;
-  divYield: number | null;
-  float: number | null;
-  high52: number | null;
-  low52: number | null;
-  avgVolume: number | null;
+type Stats = {
+  name: string | null;
   sector: string | null;
   exchange: string | null;
-  companyName: string | null;
-  price: number | null;
-  analystBuy: number | null;
-  analystHold: number | null;
-  analystSell: number | null;
+  currentPrice: number | null;
+  marketCap: number | null;
+  peRatio: number | null;
+  eps: number | null;
+  revenue: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  avgVolume: number | null;
+  beta: number | null;
+  dividendYield: number | null; // fraction 0–1 from Yahoo
+  floatShares: number | null;
+  analystRatings: {
+    buy: number;
+    hold: number;
+    sell: number;
+    totalAnalysts: number;
+  } | null;
 };
 
 const MUTED_BAR = "rgb(var(--color-grey-300))";
@@ -58,8 +61,11 @@ const formatPrice = (n: number | null): string =>
 const formatBeta = (n: number | null): string =>
   n == null ? PLACEHOLDER : n.toFixed(2);
 
-const formatDivYield = (n: number | null): string =>
-  n == null || n === 0 ? "N/A" : `${n.toFixed(2)}%`;
+const formatDivYield = (n: number | null): string => {
+  if (n == null || n === 0) return "N/A";
+  // Yahoo returns dividend yield as a fraction (0.0234 = 2.34%).
+  return `${(n * 100).toFixed(2)}%`;
+};
 
 const formatFloat = (n: number | null): string =>
   n == null
@@ -83,25 +89,27 @@ function buildLoadingStats(): Stat[] {
   ];
 }
 
-function buildStats(f: Fundamentals): Stat[] {
+function buildStats(f: Stats): Stat[] {
   return [
     { label: "Market Cap", value: formatMarketCap(f.marketCap) },
-    { label: "P/E Ratio", value: formatPE(f.pe) },
+    { label: "P/E Ratio", value: formatPE(f.peRatio) },
     { label: "EPS", value: formatEPS(f.eps) },
     { label: "Revenue", value: formatRevenue(f.revenue) },
-    { label: "52W High", value: formatPrice(f.high52) },
-    { label: "52W Low", value: formatPrice(f.low52) },
+    { label: "52W High", value: formatPrice(f.fiftyTwoWeekHigh) },
+    { label: "52W Low", value: formatPrice(f.fiftyTwoWeekLow) },
     { label: "Avg Volume", value: formatVolume(f.avgVolume) },
     { label: "Beta", value: formatBeta(f.beta) },
-    { label: "Div Yield", value: formatDivYield(f.divYield) },
-    { label: "Float", value: formatFloat(f.float) },
+    { label: "Div Yield", value: formatDivYield(f.dividendYield) },
+    { label: "Float", value: formatFloat(f.floatShares) },
   ];
 }
 
-function buildRatings(f: Fundamentals | null): Rating[] {
-  const buy = f?.analystBuy ?? 0;
-  const hold = f?.analystHold ?? 0;
-  const sell = f?.analystSell ?? 0;
+function buildRatings(f: Stats | null): Rating[] {
+  const r = f?.analystRatings;
+  // Yahoo returns 0–1 fractions; bar widths need 0–100.
+  const buy = (r?.buy ?? 0) * 100;
+  const hold = (r?.hold ?? 0) * 100;
+  const sell = (r?.sell ?? 0) * 100;
   return [
     { label: "Buy", pct: buy, color: "#00FF94" },
     { label: "Hold", pct: hold, color: MUTED_BAR },
@@ -122,22 +130,22 @@ type Props = {
 };
 
 export default function DetailPanel({ selectedTicker }: Props) {
-  const [fundamentals, setFundamentals] = useState<Fundamentals | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [news, setNews] = useState<NewsItem[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setFundamentals(null);
+    setStats(null);
     setNews(null);
 
     Promise.all([
-      fetch(`/api/fundamentals/${selectedTicker}`, { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : {}))
+      fetch(`/api/stats/${selectedTicker}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
         .catch((err) => {
-          console.warn(`Fundamentals fetch for ${selectedTicker} failed:`, err);
-          return {};
+          console.warn(`Stats fetch for ${selectedTicker} failed:`, err);
+          return null;
         }),
       fetch(`/api/news/${selectedTicker}`, { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : []))
@@ -145,18 +153,15 @@ export default function DetailPanel({ selectedTicker }: Props) {
           console.warn(`News fetch for ${selectedTicker} failed:`, err);
           return [];
         }),
-    ]).then(([fund, articles]) => {
+    ]).then(([s, articles]) => {
       if (cancelled) return;
 
-      console.log("Fundamentals received:", fund);
-      console.log(
-        "Fundamentals keys:",
-        fund && typeof fund === "object" ? Object.keys(fund) : "(not an object)",
-      );
-
-      const hasFund =
-        fund && typeof fund === "object" && Object.keys(fund).length > 0;
-      setFundamentals(hasFund ? (fund as Fundamentals) : null);
+      const hasStats =
+        s &&
+        typeof s === "object" &&
+        !("error" in s) &&
+        Object.keys(s).length > 0;
+      setStats(hasStats ? (s as Stats) : null);
       setNews(Array.isArray(articles) ? articles : []);
       setLoading(false);
     });
@@ -166,26 +171,24 @@ export default function DetailPanel({ selectedTicker }: Props) {
     };
   }, [selectedTicker]);
 
-  const stats = loading
+  const statsRows = loading
     ? buildLoadingStats()
-    : fundamentals
-      ? buildStats(fundamentals)
+    : stats
+      ? buildStats(stats)
       : buildLoadingStats();
 
-  const ratings = buildRatings(loading ? null : fundamentals);
+  const ratings = buildRatings(loading ? null : stats);
 
   const displayName = loading
     ? PLACEHOLDER
-    : (fundamentals?.companyName ?? selectedTicker);
-  const displaySector = loading ? PLACEHOLDER : (fundamentals?.sector ?? "—");
-  const displayExchange = loading
-    ? PLACEHOLDER
-    : (fundamentals?.exchange ?? "—");
+    : (stats?.name ?? selectedTicker);
+  const displaySector = loading ? PLACEHOLDER : (stats?.sector ?? "—");
+  const displayExchange = loading ? PLACEHOLDER : (stats?.exchange ?? "—");
 
   const range = {
-    low: fundamentals?.low52 ?? null,
-    current: fundamentals?.price ?? null,
-    high: fundamentals?.high52 ?? null,
+    low: stats?.fiftyTwoWeekLow ?? null,
+    current: stats?.currentPrice ?? null,
+    high: stats?.fiftyTwoWeekHigh ?? null,
   };
 
   const newsToShow: NewsItem[] =
@@ -203,7 +206,7 @@ export default function DetailPanel({ selectedTicker }: Props) {
         exchange={displayExchange}
         ticker={selectedTicker}
       />
-      <StatsGrid stats={stats} />
+      <StatsGrid stats={statsRows} />
       <PerformanceRange range={range} />
       <AnalystRatings ratings={ratings} loading={loading} />
       <LatestNews news={newsToShow} />
