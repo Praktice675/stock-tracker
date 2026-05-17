@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/client";
 
 export default function Nav() {
+  const router = useRouter();
+  const supabase = createClient();
+
   const [scrolled, setScrolled] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     let raf = 0;
@@ -25,18 +32,50 @@ export default function Nav() {
     };
   }, []);
 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      },
+    );
+    return () => listener.subscription.unsubscribe();
+  }, [supabase]);
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.refresh();
+  }
+
   return (
     <nav className={`pulse-nav${scrolled ? " scrolled" : ""}`}>
       <Link href="/landing" className="pulse-nav__logo">
         PULSE
       </Link>
       <div className="pulse-nav__right">
-        <a href="#" className="pulse-nav__signin">
-          SIGN IN
-        </a>
-        <Link href="/" className="pulse-nav__cta">
-          LAUNCH APP →
-        </Link>
+        {user ? (
+          <>
+            <span className="pulse-nav__email" title={user.email ?? undefined}>
+              {user.email}
+            </span>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="pulse-nav__signout"
+            >
+              SIGN OUT
+            </button>
+          </>
+        ) : (
+          <>
+            <Link href="/auth/login" className="pulse-nav__signin">
+              SIGN IN
+            </Link>
+            <Link href="/dashboard" className="pulse-nav__cta">
+              LAUNCH APP →
+            </Link>
+          </>
+        )}
       </div>
     </nav>
   );

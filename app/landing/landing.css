@@ -117,6 +117,31 @@ body:has(.landing-root) {
   transform: scale(1.02);
   filter: brightness(1.05);
 }
+.pulse-nav__email {
+  font-family: var(--font-mono-landing);
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pulse-nav__signout {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: var(--font-mono-landing);
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 200ms ease;
+}
+.pulse-nav__signout:hover {
+  color: var(--accent);
+}
 
 /* ---------- Hero ---------- */
 .pulse-hero {
