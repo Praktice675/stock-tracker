@@ -49,7 +49,7 @@ export default function Nav() {
 
   return (
     <nav className={`pulse-nav${scrolled ? " scrolled" : ""}`}>
-      <Link href="/landing" className="pulse-nav__logo">
+      <Link href="/" className="pulse-nav__logo">
         PULSE
       </Link>
       <div className="pulse-nav__right">
@@ -71,7 +71,7 @@ export default function Nav() {
             <Link href="/auth/login" className="pulse-nav__signin">
               SIGN IN
             </Link>
-            <Link href="/dashboard" className="pulse-nav__cta">
+            <Link href="/auth/signup" className="pulse-nav__cta">
               LAUNCH APP →
             </Link>
           </>

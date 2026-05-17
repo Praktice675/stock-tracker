@@ -72,7 +72,7 @@ export default function Hero() {
         REAL-TIME MARKETS · PROFESSIONAL GRADE
       </p>
 
-      <Link href="/" className="pulse-hero__cta hero-cta">
+      <Link href="/dashboard" className="pulse-hero__cta hero-cta">
         LAUNCH TERMINAL →
       </Link>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import DetailPanel from "@/components/DetailPanel";
 import IndicesStrip from "@/components/IndicesStrip";
@@ -369,21 +370,43 @@ function Header() {
         color: "rgb(var(--color-black))",
       }}
     >
-      <div className="flex items-center gap-3">
-        <span
-          className="live-dot inline-block h-2 w-2 rounded-full"
-          style={{ backgroundColor: "rgb(var(--color-black))" }}
-          aria-hidden="true"
-        />
-        <span
-          className="text-sm font-semibold uppercase"
+      <div className="flex items-center gap-4">
+        <Link
+          href="/"
+          className="font-mono font-bold uppercase transition-opacity hover:opacity-70"
           style={{
-            letterSpacing: "0.25em",
+            fontSize: "11px",
+            letterSpacing: "0.3em",
             color: "rgb(var(--color-black))",
+            textDecoration: "none",
           }}
         >
-          Market
-        </span>
+          ← Pulse
+        </Link>
+        <span
+          aria-hidden="true"
+          style={{
+            width: "1px",
+            height: "14px",
+            backgroundColor: "rgba(0, 0, 0, 0.25)",
+          }}
+        />
+        <div className="flex items-center gap-3">
+          <span
+            className="live-dot inline-block h-2 w-2 rounded-full"
+            style={{ backgroundColor: "rgb(var(--color-black))" }}
+            aria-hidden="true"
+          />
+          <span
+            className="text-sm font-semibold uppercase"
+            style={{
+              letterSpacing: "0.25em",
+              color: "rgb(var(--color-black))",
+            }}
+          >
+            Market
+          </span>
+        </div>
       </div>
 
       <IndicesStrip />

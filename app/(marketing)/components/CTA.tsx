@@ -61,7 +61,7 @@ export default function CTA() {
         ))}
       </h2>
       <p className="pulse-cta__sub cta-subline">Join traders using Pulse.</p>
-      <Link href="/" className="pulse-cta__btn cta-button">
+      <Link href="/dashboard" className="pulse-cta__btn cta-button">
         LAUNCH TERMINAL →
       </Link>
     </section>
