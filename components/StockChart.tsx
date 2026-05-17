@@ -17,7 +17,8 @@ type Props = {
 };
 
 type Candle = {
-  time: string;
+  // Daily candles use "YYYY-MM-DD" strings; intraday candles use unix seconds.
+  time: string | number;
   open: number;
   high: number;
   low: number;
@@ -114,11 +115,13 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
     setLoading(true);
 
     let cancelled = false;
-    fetch(`/api/candles/${selectedTicker}`)
+    fetch(`/api/candles/${selectedTicker}?timeframe=${activeTf}`, {
+      cache: "no-store",
+    })
       .then(async (res) => {
         if (!res.ok) {
           console.warn(
-            `Candles fetch for ${selectedTicker} returned HTTP ${res.status}; keeping mock data`,
+            `Candles fetch for ${selectedTicker} (${activeTf}) returned HTTP ${res.status}; keeping mock data`,
           );
           return;
         }
@@ -130,7 +133,7 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
       })
       .catch((err) => {
         console.warn(
-          `Candles fetch for ${selectedTicker} failed; keeping mock data:`,
+          `Candles fetch for ${selectedTicker} (${activeTf}) failed; keeping mock data:`,
           err instanceof Error ? err.message : err,
         );
       })
@@ -141,7 +144,7 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [selectedTicker]);
+  }, [selectedTicker, activeTf]);
 
   const last = data[data.length - 1];
   const prev = data[data.length - 2] ?? last;
@@ -165,7 +168,7 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
       rightPriceScale: { borderColor: "rgba(255, 255, 255, 0.06)" },
       timeScale: {
         borderColor: "rgba(255, 255, 255, 0.06)",
-        timeVisible: false,
+        timeVisible: true,
         secondsVisible: false,
       },
       crosshair: { mode: 0 },

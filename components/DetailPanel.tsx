@@ -6,286 +6,115 @@ type Stat = { label: string; value: string };
 type Rating = { label: string; pct: number; color: string };
 type NewsItem = { headline: string; source: string; time: string };
 
-type TickerData = {
-  name: string;
-  sector: string;
-  exchange: string;
-  stats: Stat[];
-  range: { low: number; current: number; high: number };
-  ratings: Rating[];
-  news: NewsItem[];
+type Fundamentals = {
+  marketCap: number | null;
+  pe: number | null;
+  eps: number | null;
+  revenue: number | null;
+  beta: number | null;
+  divYield: number | null;
+  float: number | null;
+  high52: number | null;
+  low52: number | null;
+  avgVolume: number | null;
+  sector: string | null;
+  exchange: string | null;
+  companyName: string | null;
+  price: number | null;
+  analystBuy: number | null;
+  analystHold: number | null;
+  analystSell: number | null;
 };
 
 const MUTED_BAR = "rgb(var(--color-grey-300))";
+const PLACEHOLDER = "—";
 
-const TICKER_DATA: Record<string, TickerData> = {
-  AAPL: {
-    name: "Apple Inc.",
-    sector: "Technology",
-    exchange: "NASDAQ",
-    stats: [
-      { label: "Market Cap", value: "$2.94T" },
-      { label: "P/E Ratio", value: "29.4x" },
-      { label: "EPS", value: "$6.43" },
-      { label: "Revenue", value: "$383.9B" },
-      { label: "52W High", value: "$199.62" },
-      { label: "52W Low", value: "$164.08" },
-      { label: "Avg Volume", value: "58.3M" },
-      { label: "Beta", value: "1.24" },
-      { label: "Div Yield", value: "0.52%" },
-      { label: "Float", value: "15.4B" },
-    ],
-    range: { low: 164.08, current: 171.39, high: 199.62 },
-    ratings: [
-      { label: "Buy", pct: 68, color: "#00FF94" },
-      { label: "Hold", pct: 24, color: MUTED_BAR },
-      { label: "Sell", pct: 8, color: "#FF3B5C" },
-    ],
-    news: [
-      {
-        headline:
-          "Apple announces record Q4 earnings, beats analyst expectations on services revenue growth",
-        source: "Reuters",
-        time: "2h ago",
-      },
-      {
-        headline:
-          "iPhone 16 demand reportedly stronger than prior cycle as AI features roll out globally",
-        source: "Bloomberg",
-        time: "5h ago",
-      },
-      {
-        headline:
-          "Apple expands India manufacturing footprint with new Foxconn facility in Karnataka",
-        source: "WSJ",
-        time: "9h ago",
-      },
-    ],
-  },
+const formatMarketCap = (n: number | null): string =>
+  n == null
+    ? PLACEHOLDER
+    : n >= 1e12
+      ? `$${(n / 1e12).toFixed(2)}T`
+      : `$${(n / 1e9).toFixed(1)}B`;
 
-  NVDA: {
-    name: "NVIDIA Corp.",
-    sector: "Semiconductors",
-    exchange: "NASDAQ",
-    stats: [
-      { label: "Market Cap", value: "$2.18T" },
-      { label: "P/E Ratio", value: "68.2x" },
-      { label: "EPS", value: "$12.87" },
-      { label: "Revenue", value: "$60.9B" },
-      { label: "52W High", value: "$974.00" },
-      { label: "52W Low", value: "$370.40" },
-      { label: "Avg Volume", value: "49.5M" },
-      { label: "Beta", value: "1.68" },
-      { label: "Div Yield", value: "0.03%" },
-      { label: "Float", value: "2.4B" },
-    ],
-    range: { low: 370.4, current: 855.0, high: 974.0 },
-    ratings: [
-      { label: "Buy", pct: 82, color: "#00FF94" },
-      { label: "Hold", pct: 14, color: MUTED_BAR },
-      { label: "Sell", pct: 4, color: "#FF3B5C" },
-    ],
-    news: [
-      {
-        headline:
-          "NVIDIA Blackwell shipments accelerate as hyperscalers expand AI training capacity",
-        source: "Bloomberg",
-        time: "1h ago",
-      },
-      {
-        headline:
-          "Analysts raise NVDA price targets following stronger-than-expected datacenter guidance",
-        source: "CNBC",
-        time: "4h ago",
-      },
-      {
-        headline:
-          "China export restrictions reshape NVIDIA's product roadmap for the region",
-        source: "Reuters",
-        time: "11h ago",
-      },
-    ],
-  },
+const formatVolume = (n: number | null): string =>
+  n == null ? PLACEHOLDER : `${(n / 1e6).toFixed(1)}M`;
 
-  TSLA: {
-    name: "Tesla Inc.",
-    sector: "Auto / EV",
-    exchange: "NASDAQ",
-    stats: [
-      { label: "Market Cap", value: "$564B" },
-      { label: "P/E Ratio", value: "47.8x" },
-      { label: "EPS", value: "$3.71" },
-      { label: "Revenue", value: "$96.8B" },
-      { label: "52W High", value: "$278.98" },
-      { label: "52W Low", value: "$138.80" },
-      { label: "Avg Volume", value: "95.2M" },
-      { label: "Beta", value: "2.30" },
-      { label: "Div Yield", value: "0.00%" },
-      { label: "Float", value: "2.8B" },
-    ],
-    range: { low: 138.8, current: 180.0, high: 278.98 },
-    ratings: [
-      { label: "Buy", pct: 42, color: "#00FF94" },
-      { label: "Hold", pct: 38, color: MUTED_BAR },
-      { label: "Sell", pct: 20, color: "#FF3B5C" },
-    ],
-    news: [
-      {
-        headline:
-          "Tesla unveils refreshed Model Y variant with improved range and revised pricing tier",
-        source: "Reuters",
-        time: "3h ago",
-      },
-      {
-        headline:
-          "Robotaxi rollout timeline tightens as regulatory pilot expands to two additional cities",
-        source: "WSJ",
-        time: "7h ago",
-      },
-      {
-        headline:
-          "Energy storage division posts record quarter on Megapack deployment growth",
-        source: "Bloomberg",
-        time: "12h ago",
-      },
-    ],
-  },
+const formatRevenue = (n: number | null): string =>
+  n == null
+    ? PLACEHOLDER
+    : n >= 1e12
+      ? `$${(n / 1e12).toFixed(1)}T`
+      : `$${(n / 1e9).toFixed(1)}B`;
 
-  MSFT: {
-    name: "Microsoft Corp.",
-    sector: "Technology",
-    exchange: "NASDAQ",
-    stats: [
-      { label: "Market Cap", value: "$3.08T" },
-      { label: "P/E Ratio", value: "36.1x" },
-      { label: "EPS", value: "$11.49" },
-      { label: "Revenue", value: "$227.6B" },
-      { label: "52W High", value: "$430.82" },
-      { label: "52W Low", value: "$309.45" },
-      { label: "Avg Volume", value: "22.7M" },
-      { label: "Beta", value: "0.90" },
-      { label: "Div Yield", value: "0.72%" },
-      { label: "Float", value: "7.4B" },
-    ],
-    range: { low: 309.45, current: 415.32, high: 430.82 },
-    ratings: [
-      { label: "Buy", pct: 78, color: "#00FF94" },
-      { label: "Hold", pct: 18, color: MUTED_BAR },
-      { label: "Sell", pct: 4, color: "#FF3B5C" },
-    ],
-    news: [
-      {
-        headline:
-          "Microsoft Azure AI revenue surges as enterprise Copilot adoption widens across Fortune 500",
-        source: "Bloomberg",
-        time: "2h ago",
-      },
-      {
-        headline:
-          "Activision integration on track, Game Pass subscriber growth accelerates into holiday season",
-        source: "CNBC",
-        time: "6h ago",
-      },
-      {
-        headline:
-          "Microsoft expands datacenter investment in Southeast Asia to meet AI capacity demand",
-        source: "Reuters",
-        time: "10h ago",
-      },
-    ],
-  },
+const formatPE = (n: number | null): string =>
+  n == null || n <= 0 ? "N/A" : `${n.toFixed(1)}x`;
 
-  SPY: {
-    name: "SPDR S&P 500 ETF",
-    sector: "ETF",
-    exchange: "NYSEARCA",
-    stats: [
-      { label: "AUM", value: "$521B" },
-      { label: "P/E Ratio", value: "N/A" },
-      { label: "EPS", value: "N/A" },
-      { label: "Revenue", value: "N/A" },
-      { label: "52W High", value: "$524.61" },
-      { label: "52W Low", value: "$409.21" },
-      { label: "Avg Volume", value: "78.4M" },
-      { label: "Beta", value: "N/A" },
-      { label: "Div Yield", value: "1.32%" },
-      { label: "Float", value: "N/A" },
-    ],
-    range: { low: 409.21, current: 521.88, high: 524.61 },
-    ratings: [
-      { label: "Buy", pct: 55, color: "#00FF94" },
-      { label: "Hold", pct: 38, color: MUTED_BAR },
-      { label: "Sell", pct: 7, color: "#FF3B5C" },
-    ],
-    news: [
-      {
-        headline:
-          "S&P 500 closes at fresh record as megacap tech rally extends into broader cyclicals",
-        source: "WSJ",
-        time: "1h ago",
-      },
-      {
-        headline:
-          "Fund flows into SPY pick up as rate-cut expectations firm following softer CPI print",
-        source: "Bloomberg",
-        time: "5h ago",
-      },
-      {
-        headline:
-          "Sector rotation favors industrials and financials as breadth indicators improve",
-        source: "Reuters",
-        time: "8h ago",
-      },
-    ],
-  },
+const formatEPS = (n: number | null): string =>
+  n == null ? PLACEHOLDER : `$${n.toFixed(2)}`;
 
-  META: {
-    name: "Meta Platforms",
-    sector: "Technology",
-    exchange: "NASDAQ",
-    stats: [
-      { label: "Market Cap", value: "$1.34T" },
-      { label: "P/E Ratio", value: "26.3x" },
-      { label: "EPS", value: "$20.10" },
-      { label: "Revenue", value: "$134.9B" },
-      { label: "52W High", value: "$542.81" },
-      { label: "52W Low", value: "$228.94" },
-      { label: "Avg Volume", value: "16.8M" },
-      { label: "Beta", value: "1.20" },
-      { label: "Div Yield", value: "0.38%" },
-      { label: "Float", value: "2.2B" },
-    ],
-    range: { low: 228.94, current: 528.4, high: 542.81 },
-    ratings: [
-      { label: "Buy", pct: 70, color: "#00FF94" },
-      { label: "Hold", pct: 22, color: MUTED_BAR },
-      { label: "Sell", pct: 8, color: "#FF3B5C" },
-    ],
-    news: [
-      {
-        headline:
-          "Meta ad revenue growth reaccelerates as AI-driven targeting improves campaign performance",
-        source: "Bloomberg",
-        time: "2h ago",
-      },
-      {
-        headline:
-          "Reality Labs trims operating loss as Ray-Ban smart glasses sales beat internal forecasts",
-        source: "CNBC",
-        time: "6h ago",
-      },
-      {
-        headline:
-          "Threads passes new monthly active user milestone, narrowing gap with rival platform",
-        source: "Reuters",
-        time: "13h ago",
-      },
-    ],
-  },
-};
+const formatPrice = (n: number | null): string =>
+  n == null ? PLACEHOLDER : `$${n.toFixed(2)}`;
 
-function getTickerData(ticker: string): TickerData {
-  return TICKER_DATA[ticker] ?? TICKER_DATA.AAPL;
+const formatBeta = (n: number | null): string =>
+  n == null ? PLACEHOLDER : n.toFixed(2);
+
+const formatDivYield = (n: number | null): string =>
+  n == null || n === 0 ? "N/A" : `${n.toFixed(2)}%`;
+
+const formatFloat = (n: number | null): string =>
+  n == null
+    ? PLACEHOLDER
+    : n >= 1e9
+      ? `${(n / 1e9).toFixed(1)}B`
+      : `${(n / 1e6).toFixed(1)}M`;
+
+function buildLoadingStats(): Stat[] {
+  return [
+    { label: "Market Cap", value: PLACEHOLDER },
+    { label: "P/E Ratio", value: PLACEHOLDER },
+    { label: "EPS", value: PLACEHOLDER },
+    { label: "Revenue", value: PLACEHOLDER },
+    { label: "52W High", value: PLACEHOLDER },
+    { label: "52W Low", value: PLACEHOLDER },
+    { label: "Avg Volume", value: PLACEHOLDER },
+    { label: "Beta", value: PLACEHOLDER },
+    { label: "Div Yield", value: PLACEHOLDER },
+    { label: "Float", value: PLACEHOLDER },
+  ];
+}
+
+function buildStats(f: Fundamentals): Stat[] {
+  return [
+    { label: "Market Cap", value: formatMarketCap(f.marketCap) },
+    { label: "P/E Ratio", value: formatPE(f.pe) },
+    { label: "EPS", value: formatEPS(f.eps) },
+    { label: "Revenue", value: formatRevenue(f.revenue) },
+    { label: "52W High", value: formatPrice(f.high52) },
+    { label: "52W Low", value: formatPrice(f.low52) },
+    { label: "Avg Volume", value: formatVolume(f.avgVolume) },
+    { label: "Beta", value: formatBeta(f.beta) },
+    { label: "Div Yield", value: formatDivYield(f.divYield) },
+    { label: "Float", value: formatFloat(f.float) },
+  ];
+}
+
+function buildRatings(f: Fundamentals | null): Rating[] {
+  const buy = f?.analystBuy ?? 0;
+  const hold = f?.analystHold ?? 0;
+  const sell = f?.analystSell ?? 0;
+  return [
+    { label: "Buy", pct: buy, color: "#00FF94" },
+    { label: "Hold", pct: hold, color: MUTED_BAR },
+    { label: "Sell", pct: sell, color: "#FF3B5C" },
+  ];
+}
+
+function loadingNews(): NewsItem[] {
+  return [
+    { headline: PLACEHOLDER, source: PLACEHOLDER, time: "" },
+    { headline: PLACEHOLDER, source: PLACEHOLDER, time: "" },
+    { headline: PLACEHOLDER, source: PLACEHOLDER, time: "" },
+  ];
 }
 
 type Props = {
@@ -293,46 +122,91 @@ type Props = {
 };
 
 export default function DetailPanel({ selectedTicker }: Props) {
-  const data = getTickerData(selectedTicker);
-  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [fundamentals, setFundamentals] = useState<Fundamentals | null>(null);
+  const [news, setNews] = useState<NewsItem[] | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    setLivePrice(null);
+    setLoading(true);
+    setFundamentals(null);
+    setNews(null);
 
-    fetch(`/api/quote/${selectedTicker}`)
-      .then(async (res) => {
-        if (!res.ok) return;
-        const json = await res.json();
-        if (cancelled) return;
-        if (typeof json?.price === "number") {
-          setLivePrice(json.price);
-        }
-      })
-      .catch((err) => {
-        console.error(`Failed to fetch quote for ${selectedTicker}:`, err);
-      });
+    Promise.all([
+      fetch(`/api/fundamentals/${selectedTicker}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch((err) => {
+          console.warn(`Fundamentals fetch for ${selectedTicker} failed:`, err);
+          return {};
+        }),
+      fetch(`/api/news/${selectedTicker}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : []))
+        .catch((err) => {
+          console.warn(`News fetch for ${selectedTicker} failed:`, err);
+          return [];
+        }),
+    ]).then(([fund, articles]) => {
+      if (cancelled) return;
+
+      console.log("Fundamentals received:", fund);
+      console.log(
+        "Fundamentals keys:",
+        fund && typeof fund === "object" ? Object.keys(fund) : "(not an object)",
+      );
+
+      const hasFund =
+        fund && typeof fund === "object" && Object.keys(fund).length > 0;
+      setFundamentals(hasFund ? (fund as Fundamentals) : null);
+      setNews(Array.isArray(articles) ? articles : []);
+      setLoading(false);
+    });
 
     return () => {
       cancelled = true;
     };
   }, [selectedTicker]);
 
-  const range =
-    livePrice != null ? { ...data.range, current: livePrice } : data.range;
+  const stats = loading
+    ? buildLoadingStats()
+    : fundamentals
+      ? buildStats(fundamentals)
+      : buildLoadingStats();
+
+  const ratings = buildRatings(loading ? null : fundamentals);
+
+  const displayName = loading
+    ? PLACEHOLDER
+    : (fundamentals?.companyName ?? selectedTicker);
+  const displaySector = loading ? PLACEHOLDER : (fundamentals?.sector ?? "—");
+  const displayExchange = loading
+    ? PLACEHOLDER
+    : (fundamentals?.exchange ?? "—");
+
+  const range = {
+    low: fundamentals?.low52 ?? null,
+    current: fundamentals?.price ?? null,
+    high: fundamentals?.high52 ?? null,
+  };
+
+  const newsToShow: NewsItem[] =
+    loading || news == null
+      ? loadingNews()
+      : news.length > 0
+        ? news
+        : loadingNews();
 
   return (
     <div className="flex h-full flex-col">
       <Header
-        name={data.name}
-        sector={data.sector}
-        exchange={data.exchange}
+        name={displayName}
+        sector={displaySector}
+        exchange={displayExchange}
         ticker={selectedTicker}
       />
-      <StatsGrid stats={data.stats} />
+      <StatsGrid stats={stats} />
       <PerformanceRange range={range} />
-      <AnalystRatings ratings={data.ratings} />
-      <LatestNews news={data.news} />
+      <AnalystRatings ratings={ratings} loading={loading} />
+      <LatestNews news={newsToShow} />
     </div>
   );
 }
@@ -416,10 +290,18 @@ function StatsGrid({ stats }: { stats: Stat[] }) {
 function PerformanceRange({
   range,
 }: {
-  range: { low: number; current: number; high: number };
+  range: { low: number | null; current: number | null; high: number | null };
 }) {
-  const pct = ((range.current - range.low) / (range.high - range.low)) * 100;
-  const clamped = Math.max(0, Math.min(100, pct));
+  const haveBounds =
+    range.low != null && range.high != null && range.high > range.low;
+  const haveCurrent = range.current != null;
+
+  let pct = 0;
+  if (haveBounds && haveCurrent) {
+    const span = (range.high as number) - (range.low as number);
+    pct = (((range.current as number) - (range.low as number)) / span) * 100;
+    pct = Math.max(0, Math.min(100, pct));
+  }
 
   return (
     <section
@@ -442,30 +324,34 @@ function PerformanceRange({
           borderRadius: "var(--border-radius)",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            height: "100%",
-            width: `${clamped}%`,
-            backgroundColor: "rgb(var(--color-orange))",
-            borderRadius: "var(--border-radius)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: `${clamped}%`,
-            width: "10px",
-            height: "10px",
-            transform: "translate(-50%, -50%)",
-            backgroundColor: "rgb(var(--color-orange))",
-            borderRadius: "9999px",
-            boxShadow: "0 0 0 2px rgb(var(--color-black))",
-          }}
-        />
+        {haveBounds && haveCurrent && (
+          <>
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                height: "100%",
+                width: `${pct}%`,
+                backgroundColor: "rgb(var(--color-orange))",
+                borderRadius: "var(--border-radius)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: `${pct}%`,
+                width: "10px",
+                height: "10px",
+                transform: "translate(-50%, -50%)",
+                backgroundColor: "rgb(var(--color-orange))",
+                borderRadius: "9999px",
+                boxShadow: "0 0 0 2px rgb(var(--color-black))",
+              }}
+            />
+          </>
+        )}
       </div>
 
       <div className="flex justify-between">
@@ -473,20 +359,26 @@ function PerformanceRange({
           className="text-text-muted font-mono"
           style={{ fontSize: "9px", letterSpacing: "-0.015em" }}
         >
-          ${range.low.toFixed(2)}
+          {range.low != null ? `$${range.low.toFixed(2)}` : PLACEHOLDER}
         </span>
         <span
           className="text-text-muted font-mono"
           style={{ fontSize: "9px", letterSpacing: "-0.015em" }}
         >
-          ${range.high.toFixed(2)}
+          {range.high != null ? `$${range.high.toFixed(2)}` : PLACEHOLDER}
         </span>
       </div>
     </section>
   );
 }
 
-function AnalystRatings({ ratings }: { ratings: Rating[] }) {
+function AnalystRatings({
+  ratings,
+  loading,
+}: {
+  ratings: Rating[];
+  loading: boolean;
+}) {
   return (
     <section
       style={{ padding: "16px", borderBottom: "1px solid var(--border)" }}
@@ -545,7 +437,7 @@ function AnalystRatings({ ratings }: { ratings: Rating[] }) {
                 letterSpacing: "-0.015em",
               }}
             >
-              {r.pct}%
+              {loading ? PLACEHOLDER : `${Math.round(r.pct)}%`}
             </span>
           </div>
         ))}
@@ -571,7 +463,7 @@ function LatestNews({ news }: { news: NewsItem[] }) {
       <div className="flex flex-col">
         {news.map((n, i) => (
           <article
-            key={n.headline}
+            key={`${i}-${n.headline}`}
             className="group cursor-pointer"
             style={{
               padding: "10px 0",
@@ -599,7 +491,8 @@ function LatestNews({ news }: { news: NewsItem[] }) {
                 letterSpacing: "-0.015em",
               }}
             >
-              {n.source} · {n.time}
+              {n.source}
+              {n.time ? ` · ${n.time}` : ""}
             </div>
           </article>
         ))}

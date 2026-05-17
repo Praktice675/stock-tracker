@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Line, LineChart, ResponsiveContainer } from "recharts";
+
+type WatchlistEntry = { ticker: string; name: string };
 
 type LiveQuote = {
   price: number;
@@ -9,118 +18,353 @@ type LiveQuote = {
   changePercent: number;
 };
 
-type Stock = {
-  ticker: string;
-  name: string;
-  price: number;
-  change: number;
-  spark: number[];
-};
-
-const mockStocks: Stock[] = [
-  { ticker: "AAPL", name: "Apple Inc.", price: 189.43, change: 1.24,
-    spark: [182, 184, 183, 186, 185, 188, 189] },
-  { ticker: "NVDA", name: "NVIDIA Corp.", price: 875.20, change: 3.81,
-    spark: [820, 835, 842, 858, 861, 870, 875] },
-  { ticker: "TSLA", name: "Tesla Inc.", price: 177.58, change: -2.14,
-    spark: [195, 190, 188, 185, 183, 179, 177] },
-  { ticker: "MSFT", name: "Microsoft", price: 415.32, change: 0.67,
-    spark: [409, 410, 411, 412, 413, 414, 415] },
-  { ticker: "SPY", name: "S&P 500 ETF", price: 521.88, change: 0.43,
-    spark: [515, 516, 518, 519, 520, 521, 521] },
-  { ticker: "META", name: "Meta Platforms", price: 528.40, change: -0.92,
-    spark: [540, 537, 535, 532, 530, 529, 528] },
-];
+type SearchResult = { ticker: string; name: string };
 
 const POSITIVE = "#00FF94";
 const NEGATIVE = "#FF3B5C";
 
+// Used for every card's mini sparkline. The strict prop type from page.tsx
+// is just { ticker, name }, so there's no per-ticker series available at
+// render time — a synthetic flat series keeps the visual element intact.
+const DEFAULT_SPARK = [100, 100.4, 100.2, 100.7, 100.5, 100.9, 100.8];
+
 type WatchlistProps = {
   selectedTicker: string;
   onSelect: (ticker: string) => void;
+  watchlist: WatchlistEntry[];
+  onAddToWatchlist: (stock: WatchlistEntry) => void;
+  onRemoveFromWatchlist: (ticker: string) => void;
 };
 
-export default function Watchlist({ selectedTicker, onSelect }: WatchlistProps) {
+type FlashDirection = "green" | "red";
+
+export default function Watchlist({
+  selectedTicker,
+  onSelect,
+  watchlist,
+  onAddToWatchlist,
+  onRemoveFromWatchlist,
+}: WatchlistProps) {
   const [quotes, setQuotes] = useState<Record<string, LiveQuote>>({});
-  const [loaded, setLoaded] = useState(false);
+  const [flashStates, setFlashStates] = useState<
+    Record<string, FlashDirection | null>
+  >({});
+  const prevPrices = useRef<Record<string, number>>({});
+  const flashTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>(
+    {},
+  );
 
+  // Search state
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [flashTicker, setFlashTicker] = useState<string | null>(null);
+
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const watchlistRef = useRef(watchlist);
+  watchlistRef.current = watchlist;
+  const cancelledRef = useRef(false);
+
+  const triggerFlash = (ticker: string, direction: FlashDirection) => {
+    const pending = flashTimeoutsRef.current[ticker];
+    if (pending) clearTimeout(pending);
+    setFlashStates((s) => ({ ...s, [ticker]: direction }));
+    flashTimeoutsRef.current[ticker] = setTimeout(() => {
+      setFlashStates((s) => ({ ...s, [ticker]: null }));
+      delete flashTimeoutsRef.current[ticker];
+    }, 700);
+  };
+
+  // ---- Live-quote polling (staggered, 30s, reads watchlist via ref) ----
+  const fetchOneQuote = async (ticker: string) => {
+    try {
+      const res = await fetch(`/api/quote/${ticker}`, { cache: "no-store" });
+      if (cancelledRef.current || !res.ok) return;
+      const json = await res.json();
+      if (cancelledRef.current) return;
+      if (json?.error || typeof json?.price !== "number") return;
+
+      const newPrice = json.price as number;
+      const prev = prevPrices.current[ticker];
+      // Skip the initial value so we don't flash everything on first load
+      if (prev !== undefined && newPrice !== prev) {
+        triggerFlash(ticker, newPrice > prev ? "green" : "red");
+      }
+      prevPrices.current[ticker] = newPrice;
+
+      setQuotes((prev) => ({
+        ...prev,
+        [ticker]: {
+          price: newPrice,
+          change: json.change,
+          changePercent: json.changePercent,
+        },
+      }));
+    } catch (err) {
+      console.warn(`Quote fetch for ${ticker} failed:`, err);
+    }
+  };
+
+  // Clear any pending flash timeouts on unmount
   useEffect(() => {
-    let cancelled = false;
-
-    const fetchAll = async () => {
-      const results = await Promise.all(
-        mockStocks.map(async (s) => {
-          try {
-            const res = await fetch(`/api/quote/${s.ticker}`);
-            if (!res.ok) return [s.ticker, null] as const;
-            const json = await res.json();
-            if (json?.error || typeof json?.price !== "number") {
-              return [s.ticker, null] as const;
-            }
-            return [
-              s.ticker,
-              {
-                price: json.price,
-                change: json.change,
-                changePercent: json.changePercent,
-              } as LiveQuote,
-            ] as const;
-          } catch {
-            return [s.ticker, null] as const;
-          }
-        }),
-      );
-      if (cancelled) return;
-
-      setQuotes((prev) => {
-        const next = { ...prev };
-        for (const [ticker, q] of results) {
-          if (q) next[ticker] = q;
-        }
-        return next;
-      });
-      setLoaded(true);
-    };
-
-    fetchAll();
-    const id = setInterval(fetchAll, 60_000);
     return () => {
-      cancelled = true;
-      clearInterval(id);
+      for (const id of Object.values(flashTimeoutsRef.current)) {
+        clearTimeout(id);
+      }
+      flashTimeoutsRef.current = {};
     };
   }, []);
 
+  useEffect(() => {
+    cancelledRef.current = false;
+
+    const dispatchStaggered = () => {
+      const list = watchlistRef.current;
+      list.forEach((stock, i) => {
+        setTimeout(() => {
+          if (cancelledRef.current) return;
+          fetchOneQuote(stock.ticker);
+        }, i * 400);
+      });
+    };
+
+    dispatchStaggered();
+    const id = setInterval(dispatchStaggered, 30_000);
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When a new ticker is added via search, immediately fetch its quote
+  // so the new row doesn't sit on "---" until the next poll tick.
+  const fetchedTickersRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const s of watchlist) {
+      if (!fetchedTickersRef.current.has(s.ticker)) {
+        fetchedTickersRef.current.add(s.ticker);
+        fetchOneQuote(s.ticker);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchlist]);
+
+  // ---- Debounced search ----
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  useEffect(() => {
+    const q = debouncedQuery.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    let cancelled = false;
+    fetch(`/api/search?q=${encodeURIComponent(q)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (cancelled) return;
+        setResults(Array.isArray(data) ? data : []);
+        setSearching(false);
+      })
+      .catch((err) => {
+        console.warn("Search fetch failed:", err);
+        if (!cancelled) {
+          setResults([]);
+          setSearching(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery]);
+
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [results]);
+
+  // Outside-click dismissal
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const node = searchContainerRef.current;
+      if (node && !node.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // "Already in watchlist" flash: clear after 1s and close the dropdown
+  useEffect(() => {
+    if (!flashTicker) return;
+    const id = setTimeout(() => {
+      setFlashTicker(null);
+      setDropdownOpen(false);
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [flashTicker]);
+
+  const watchlistTickers = useMemo(
+    () => new Set(watchlist.map((s) => s.ticker)),
+    [watchlist],
+  );
+
+  const closeSearch = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setResults([]);
+    setDropdownOpen(false);
+    inputRef.current?.blur();
+  };
+
+  const viewOnly = (ticker: string) => {
+    onSelect(ticker);
+    closeSearch();
+  };
+
+  const addAndView = (stock: SearchResult) => {
+    onAddToWatchlist(stock);
+    onSelect(stock.ticker);
+    closeSearch();
+  };
+
+  const handlePrimary = (stock: SearchResult) => {
+    if (watchlistTickers.has(stock.ticker)) {
+      onSelect(stock.ticker);
+      setFlashTicker(stock.ticker);
+    } else {
+      addAndView(stock);
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setDropdownOpen(false);
+      inputRef.current?.blur();
+      return;
+    }
+    if (!dropdownOpen || results.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((i) => Math.min(i + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const r = results[highlightedIndex];
+      if (r) handlePrimary(r);
+    }
+  };
+
+  const showDropdown = dropdownOpen && query.trim().length > 0;
+  const canRemove = watchlist.length > 1;
+
   return (
     <div className="flex h-full flex-col">
-      <input
-        type="text"
-        placeholder="Search ticker..."
-        className="outline-none placeholder:text-text-muted"
-        style={{
-          display: "block",
-          width: "calc(100% - 24px)",
-          height: "36px",
-          margin: "12px",
-          padding: "0 12px",
-          backgroundColor: "rgb(var(--color-grey-800))",
-          borderRadius: "var(--border-radius)",
-          border: "none",
-          fontFamily: "var(--font-mono), monospace",
-          fontSize: "12px",
-          letterSpacing: "-0.015em",
-          color: "var(--text-primary)",
-        }}
-      />
+      <div
+        ref={searchContainerRef}
+        style={{ margin: "12px", position: "relative" }}
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          placeholder="Search ticker..."
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            if (e.target.value.trim().length > 0) setDropdownOpen(true);
+            else setDropdownOpen(false);
+          }}
+          onFocus={() => {
+            if (query.trim().length > 0) setDropdownOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+          className="outline-none placeholder:text-text-muted"
+          style={{
+            display: "block",
+            width: "100%",
+            height: "36px",
+            padding: "0 12px",
+            backgroundColor: "rgb(var(--color-grey-800))",
+            borderRadius: "var(--border-radius)",
+            border: "none",
+            fontFamily: "var(--font-mono), monospace",
+            fontSize: "12px",
+            letterSpacing: "-0.015em",
+            color: "var(--text-primary)",
+          }}
+        />
 
-      <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
-        {mockStocks.map((stock) => (
+        {showDropdown && (
+          <div
+            role="listbox"
+            style={{
+              position: "absolute",
+              top: "calc(100% + 4px)",
+              left: 0,
+              right: 0,
+              zIndex: 50,
+              backgroundColor: "rgb(var(--color-grey-800))",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--border-radius)",
+              overflow: "hidden",
+            }}
+          >
+            {query.trim().length < 2 ? (
+              <DropdownMessage>Type at least 2 characters…</DropdownMessage>
+            ) : searching ? (
+              <DropdownMessage>Searching…</DropdownMessage>
+            ) : results.length === 0 ? (
+              <DropdownMessage>No matches</DropdownMessage>
+            ) : (
+              results.map((r, i) => (
+                <SearchResultRow
+                  key={r.ticker}
+                  ticker={r.ticker}
+                  name={r.name}
+                  query={debouncedQuery}
+                  highlighted={i === highlightedIndex}
+                  inWatchlist={watchlistTickers.has(r.ticker)}
+                  flashing={flashTicker === r.ticker}
+                  onPrimary={() => handlePrimary(r)}
+                  onViewOnly={() => viewOnly(r.ticker)}
+                  onHover={() => setHighlightedIndex(i)}
+                />
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      <div
+        className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {watchlist.map((stock) => (
           <StockCard
             key={stock.ticker}
             stock={stock}
             quote={quotes[stock.ticker]}
-            loaded={loaded}
             selected={stock.ticker === selectedTicker}
+            canRemove={canRemove}
+            flashDirection={flashStates[stock.ticker] ?? null}
             onSelect={() => onSelect(stock.ticker)}
+            onRemove={() => onRemoveFromWatchlist(stock.ticker)}
           />
         ))}
       </div>
@@ -128,27 +372,223 @@ export default function Watchlist({ selectedTicker, onSelect }: WatchlistProps) 
   );
 }
 
+function DropdownMessage({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="text-text-muted"
+      style={{
+        padding: "10px 12px",
+        fontSize: "11px",
+        letterSpacing: "-0.015em",
+        fontStyle: "italic",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function renderTickerWithHighlight(ticker: string, query: string): ReactNode {
+  const q = query.trim();
+  if (!q) return ticker;
+  const idx = ticker.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return ticker;
+  const before = ticker.slice(0, idx);
+  const match = ticker.slice(idx, idx + q.length);
+  const after = ticker.slice(idx + q.length);
+  return (
+    <>
+      {before}
+      <span
+        style={{
+          backgroundColor: "rgba(255, 89, 73, 0.22)",
+          borderRadius: "2px",
+          padding: "0 1px",
+        }}
+      >
+        {match}
+      </span>
+      {after}
+    </>
+  );
+}
+
+function SearchResultRow({
+  ticker,
+  name,
+  query,
+  highlighted,
+  inWatchlist,
+  flashing,
+  onPrimary,
+  onViewOnly,
+  onHover,
+}: {
+  ticker: string;
+  name: string;
+  query: string;
+  highlighted: boolean;
+  inWatchlist: boolean;
+  flashing: boolean;
+  onPrimary: () => void;
+  onViewOnly: () => void;
+  onHover: () => void;
+}) {
+  // Show buttons when this row is highlighted (mouse hover OR keyboard
+  // navigation) AND the ticker isn't already in the watchlist. Keyboard
+  // Enter on this row triggers onPrimary regardless.
+  const showButtons = highlighted && !inWatchlist && !flashing;
+
+  return (
+    <div
+      role="option"
+      aria-selected={highlighted}
+      onMouseDown={(e) => {
+        // mousedown wins over the document-level outside-click handler
+        e.preventDefault();
+        onPrimary();
+      }}
+      onMouseEnter={onHover}
+      style={{
+        padding: "10px 12px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "12px",
+        cursor: "pointer",
+        transition: "background-color 100ms var(--ease)",
+        backgroundColor: highlighted
+          ? "rgb(var(--color-grey-700))"
+          : "transparent",
+      }}
+    >
+      <span
+        className="font-mono font-bold"
+        style={{
+          fontSize: "12px",
+          color: "rgb(var(--color-orange))",
+          letterSpacing: "-0.015em",
+          flexShrink: 0,
+        }}
+      >
+        {renderTickerWithHighlight(ticker, query)}
+      </span>
+
+      {flashing ? (
+        <span
+          className="font-mono"
+          style={{
+            fontSize: "10px",
+            color: "rgb(var(--color-orange))",
+            letterSpacing: "-0.015em",
+            textAlign: "right",
+          }}
+        >
+          Already in watchlist
+        </span>
+      ) : showButtons ? (
+        <div className="flex items-center" style={{ gap: "6px" }}>
+          <PillButton
+            variant="primary"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onPrimary();
+            }}
+          >
+            Add + View
+          </PillButton>
+          <PillButton
+            variant="muted"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onViewOnly();
+            }}
+          >
+            View only
+          </PillButton>
+        </div>
+      ) : (
+        <span
+          className="text-text-muted"
+          style={{
+            fontSize: "11px",
+            letterSpacing: "-0.015em",
+            textAlign: "right",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {inWatchlist ? `${name} · In list` : name}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PillButton({
+  variant,
+  children,
+  onClick,
+}: {
+  variant: "primary" | "muted";
+  children: ReactNode;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+}) {
+  const isPrimary = variant === "primary";
+  return (
+    <button
+      type="button"
+      onMouseDown={onClick}
+      className="font-mono"
+      style={{
+        fontSize: "10px",
+        padding: "3px 8px",
+        borderRadius: "var(--border-radius)",
+        border: "none",
+        cursor: "pointer",
+        letterSpacing: "-0.015em",
+        backgroundColor: isPrimary
+          ? "rgb(var(--color-orange))"
+          : "rgb(var(--color-grey-700))",
+        color: isPrimary
+          ? "rgb(var(--color-black))"
+          : "var(--text-muted)",
+        fontWeight: isPrimary ? 600 : 500,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function StockCard({
   stock,
   quote,
-  loaded,
   selected,
+  canRemove,
+  flashDirection,
   onSelect,
+  onRemove,
 }: {
-  stock: Stock;
+  stock: WatchlistEntry;
   quote: LiveQuote | undefined;
-  loaded: boolean;
   selected: boolean;
+  canRemove: boolean;
+  flashDirection: FlashDirection | null;
   onSelect: () => void;
+  onRemove: () => void;
 }) {
   const hasLive = !!quote;
-  const showPlaceholder = !loaded || !hasLive;
+  const showPlaceholder = !hasLive;
 
-  const changePercent = hasLive ? quote.changePercent : stock.change;
+  const changePercent = hasLive ? quote.changePercent : 0;
   const isPositive = changePercent >= 0;
   const color = isPositive ? POSITIVE : NEGATIVE;
   const sign = isPositive ? "+" : "";
-  const data = stock.spark.map((value, i) => ({ i, value }));
+  const data = DEFAULT_SPARK.map((value, i) => ({ i, value }));
 
   return (
     <div
@@ -161,7 +601,7 @@ function StockCard({
           onSelect();
         }
       }}
-      className={`cursor-pointer transition-colors duration-150 ease-brand ${
+      className={`group relative cursor-pointer transition-colors duration-150 ease-brand ${
         selected ? "" : "hover:bg-[rgb(var(--color-grey-800))]"
       }`}
       style={{
@@ -173,6 +613,38 @@ function StockCard({
         backgroundColor: selected ? "rgb(var(--color-grey-700))" : undefined,
       }}
     >
+      {canRemove && (
+        <button
+          type="button"
+          aria-label={`Remove ${stock.ticker} from watchlist`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="opacity-0 transition-opacity duration-150 ease-brand group-hover:opacity-100"
+          style={{
+            position: "absolute",
+            top: "8px",
+            right: "8px",
+            width: "16px",
+            height: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "none",
+            background: "transparent",
+            color: "var(--text-muted)",
+            fontSize: "14px",
+            lineHeight: 1,
+            cursor: "pointer",
+            padding: 0,
+          }}
+        >
+          ×
+        </button>
+      )}
+
       <div className="flex items-start justify-between">
         <div className="flex flex-col">
           <span
@@ -191,13 +663,26 @@ function StockCard({
 
         <div className="flex flex-col items-end gap-1">
           <span
-            className="font-mono text-text-primary"
-            style={{ fontSize: "13px", letterSpacing: "-0.015em" }}
+            className={`font-mono text-text-primary ${
+              flashDirection === "green"
+                ? "flash-green"
+                : flashDirection === "red"
+                  ? "flash-red"
+                  : ""
+            }`}
+            style={{
+              fontSize: "13px",
+              letterSpacing: "-0.015em",
+              padding: "0 2px",
+              display: "inline-block",
+            }}
           >
             {showPlaceholder ? "---" : quote!.price.toFixed(2)}
           </span>
           <span
-            className="font-mono font-medium"
+            className={`font-mono font-medium ${
+              flashDirection ? "flash-badge" : ""
+            }`}
             style={{
               fontSize: "10px",
               padding: "2px 6px",

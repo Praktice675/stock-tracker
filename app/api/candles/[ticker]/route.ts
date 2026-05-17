@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { type Candle, fetchDailyCandles } from "@/lib/alphaVantage";
+import {
+  type YahooCandle,
+  fetchYahooCandles,
+  isYahooTimeframe,
+} from "@/lib/yahooFinance";
 
-function fallbackCandles(): Candle[] {
-  // Static 10-candle placeholder used when Alpha Vantage is unavailable
-  // (missing key, rate-limited, network error, malformed response, etc.)
+function fallbackCandles(): YahooCandle[] {
   const start = new Date("2024-01-01T00:00:00Z");
   const closes = [180, 181.5, 180.8, 182.3, 181.7, 183.4, 184.1, 183.6, 185.2, 186.0];
   return closes.map((close, i) => {
@@ -18,13 +20,15 @@ function fallbackCandles(): Candle[] {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ ticker: string }> },
 ) {
   try {
     const { ticker } = await params;
-    const data = await fetchDailyCandles(ticker);
-    const body = data ?? fallbackCandles();
+    const rawTf = new URL(req.url).searchParams.get("timeframe");
+    const timeframe = isYahooTimeframe(rawTf) ? rawTf : "1M";
+    const data = await fetchYahooCandles(ticker, timeframe);
+    const body = data && data.length > 0 ? data : fallbackCandles();
     return NextResponse.json(body, {
       headers: { "Cache-Control": "max-age=3600" },
     });

@@ -91,3 +91,34 @@ body {
 .live-dot {
   animation: live-pulse 1.6s var(--ease) infinite;
 }
+
+@keyframes flashGreen {
+  0% { background-color: transparent; color: inherit; }
+  20% { background-color: rgba(0, 255, 148, 0.25); color: #00FF94; }
+  100% { background-color: transparent; color: inherit; }
+}
+
+@keyframes flashRed {
+  0% { background-color: transparent; color: inherit; }
+  20% { background-color: rgba(255, 59, 92, 0.25); color: #FF3B5C; }
+  100% { background-color: transparent; color: inherit; }
+}
+
+@keyframes flashBadge {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.flash-green {
+  animation: flashGreen 600ms ease-out forwards;
+  border-radius: 2px;
+}
+
+.flash-red {
+  animation: flashRed 600ms ease-out forwards;
+  border-radius: 2px;
+}
+
+.flash-badge {
+  animation: flashBadge 600ms ease-out forwards;
+}

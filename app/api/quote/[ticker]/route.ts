@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchQuote } from "@/lib/alphaVantage";
+import { fetchYahooQuote } from "@/lib/yahooFinance";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker } = await params;
-  const data = await fetchQuote(ticker);
+  const data = await fetchYahooQuote(ticker);
   if (!data) {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
