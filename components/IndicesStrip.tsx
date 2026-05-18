@@ -72,7 +72,6 @@ export default function IndicesStrip() {
       for (const [ticker, q] of results) {
         if (!q) continue;
         const prev = prevPrices.current[ticker];
-        // First-load values don't flash
         if (prev !== undefined && q.price !== prev) {
           triggerFlash(ticker, q.price > prev ? "green" : "red");
         }
@@ -99,16 +98,17 @@ export default function IndicesStrip() {
   }, []);
 
   return (
-    <div className="flex items-center">
-      {INDICES.map((idx, i) => (
-        <IndexCell
-          key={idx.ticker}
-          label={idx.label}
-          quote={quotes[idx.ticker]}
-          flashDirection={flashStates[idx.ticker] ?? null}
-          isFirst={i === 0}
-        />
-      ))}
+    <div className="indices-marquee" aria-label="Major indices">
+      <div className="indices-marquee__inner">
+        {INDICES.map((idx) => (
+          <IndexCell
+            key={idx.ticker}
+            label={idx.label}
+            quote={quotes[idx.ticker]}
+            flashDirection={flashStates[idx.ticker] ?? null}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -117,14 +117,13 @@ function IndexCell({
   label,
   quote,
   flashDirection,
-  isFirst,
 }: {
   label: string;
   quote: LiveQuote | null | undefined;
   flashDirection: FlashDirection | null;
-  isFirst: boolean;
 }) {
   const hasQuote = !!quote;
+  const positive = hasQuote && quote.changePercent >= 0;
   const flashClass =
     flashDirection === "green"
       ? "flash-green"
@@ -133,87 +132,35 @@ function IndexCell({
         : "";
 
   return (
-    <div
-      className="flex items-center"
-      style={{
-        padding: "0 14px",
-        gap: "8px",
-        borderLeft: isFirst ? "none" : "1px solid rgba(0, 0, 0, 0.15)",
-      }}
-    >
-      <span
-        className="font-bold uppercase"
-        style={{
-          fontSize: "10px",
-          color: "rgb(var(--color-black))",
-          letterSpacing: "0.12em",
-        }}
-      >
-        {label}
-      </span>
-
-      <span
-        className={`font-mono ${flashClass}`}
-        style={{
-          fontSize: "11px",
-          color: "rgb(var(--color-black))",
-          letterSpacing: "-0.015em",
-          padding: "0 2px",
-          display: "inline-block",
-        }}
-      >
+    <div className="indices-marquee__cell">
+      <span className="indices-marquee__label">{label}</span>
+      <span className={`indices-marquee__value ${flashClass}`.trim()}>
         {hasQuote ? quote.price.toFixed(2) : PLACEHOLDER}
       </span>
-
       {hasQuote ? (
-        <ChangeBadge
-          changePercent={quote.changePercent}
-          flashing={!!flashDirection}
-        />
+        <span
+          className={`indices-marquee__change ${flashDirection ? "flash-badge" : ""}`.trim()}
+          style={{
+            backgroundColor: positive
+              ? "rgba(0, 208, 132, 0.12)"
+              : "rgba(255, 51, 85, 0.12)",
+            color: positive ? "#00D084" : "#FF3355",
+          }}
+        >
+          {positive ? "+" : ""}
+          {quote.changePercent.toFixed(2)}%
+        </span>
       ) : (
         <span
-          className="font-mono"
+          className="indices-marquee__change"
           style={{
-            fontSize: "10px",
-            padding: "2px 6px",
-            borderRadius: "var(--border-radius)",
-            backgroundColor: "rgba(0, 0, 0, 0.2)",
-            color: "rgb(var(--color-black))",
-            letterSpacing: "-0.015em",
+            backgroundColor: "rgba(255, 255, 255, 0.04)",
+            color: "var(--text-muted)",
           }}
         >
           {PLACEHOLDER}
         </span>
       )}
     </div>
-  );
-}
-
-function ChangeBadge({
-  changePercent,
-  flashing,
-}: {
-  changePercent: number;
-  flashing: boolean;
-}) {
-  const positive = changePercent >= 0;
-  const sign = positive ? "+" : "";
-  return (
-    <span
-      className={`font-mono ${flashing ? "flash-badge" : ""}`}
-      style={{
-        fontSize: "10px",
-        padding: "2px 6px",
-        borderRadius: "var(--border-radius)",
-        backgroundColor: positive
-          ? "rgba(255, 255, 255, 0.25)"
-          : "rgba(0, 0, 0, 0.2)",
-        color: "rgb(var(--color-black))",
-        letterSpacing: "-0.015em",
-      }}
-    >
-      {sign}
-      {changePercent.toFixed(2)}%
-    </span>
   );
 }
