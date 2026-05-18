@@ -20,7 +20,7 @@ type TickerColor = { fill: string; text: string; solid: string };
 
 // Cycle by watchlist position. Position 7+ falls back to neutral.
 const TICKER_COLORS: TickerColor[] = [
-  { fill: "rgba(255, 107, 26, 0.15)", text: "#FF6B1A", solid: "#FF6B1A" }, // orange
+  { fill: "rgba(255, 107, 26, 0.15)", text: "#ff6b3d", solid: "#ff6b3d" }, // orange
   { fill: "rgba(59, 130, 246, 0.15)", text: "#3B82F6", solid: "#3B82F6" }, // blue
   { fill: "rgba(0, 208, 132, 0.15)", text: "#00D084", solid: "#00D084" }, // green
   { fill: "rgba(168, 85, 247, 0.15)", text: "#A855F7", solid: "#A855F7" }, // purple
@@ -369,7 +369,7 @@ function CompactCard({
           style={{
             fontSize: "11px",
             letterSpacing: "0.18em",
-            color: "rgb(var(--color-orange))",
+            color: "var(--accent)",
             textDecoration: "none",
           }}
         >
@@ -412,7 +412,7 @@ function EmptyFiltered({
           style={{
             fontSize: "10px",
             letterSpacing: "0.2em",
-            color: "rgb(var(--color-orange))",
+            color: "var(--accent)",
             background: "transparent",
             border: "none",
             cursor: "pointer",

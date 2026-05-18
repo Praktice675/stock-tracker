@@ -1,7 +1,7 @@
 import type { PortfolioTotals } from "@/lib/portfolio/compute";
 
-const POSITIVE = "#00FF94";
-const NEGATIVE = "#FF3B5C";
+const POSITIVE = "#4ade80";
+const NEGATIVE = "#ef4444";
 
 function fmtMoney(n: number, signed = false): string {
   const sign = n < 0 ? "-" : signed ? "+" : "";

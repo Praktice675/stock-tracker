@@ -82,7 +82,7 @@ function EmptyWatchlist() {
             padding: "14px 28px",
             fontSize: "13px",
             letterSpacing: "0.2em",
-            backgroundColor: "rgb(var(--color-orange))",
+            backgroundColor: "var(--accent)",
             color: "rgb(var(--color-black))",
             border: "none",
             borderRadius: "var(--border-radius)",

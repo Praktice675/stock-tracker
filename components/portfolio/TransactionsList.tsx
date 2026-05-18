@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RawTransaction } from "@/lib/portfolio/compute";
 
-const POSITIVE = "#00FF94";
-const NEGATIVE = "#FF3B5C";
+const POSITIVE = "#4ade80";
+const NEGATIVE = "#ef4444";
 
 function fmtMoney(n: number): string {
   return (
@@ -193,7 +193,7 @@ export default function TransactionsList({
             </span>
             <span
               style={{
-                color: "rgb(var(--color-orange))",
+                color: "var(--accent)",
                 fontWeight: 700,
                 width: "60px",
                 flexShrink: 0,
@@ -364,7 +364,7 @@ function ActionButton({
   const bg = danger
     ? NEGATIVE
     : primary
-      ? "rgb(var(--color-orange))"
+      ? "var(--accent)"
       : "transparent";
   const color = primary || danger
     ? "rgb(var(--color-black))"

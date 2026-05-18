@@ -47,15 +47,38 @@ export async function POST() {
     ),
   );
 
-  // Parallel fetch with the bulk-style helper. Each unique symbol hits
-  // Yahoo once; missing prices are skipped (the position contributes 0
-  // rather than NaN, so a single bad ticker doesn't void the snapshot).
+  // No positions yet — nothing to snapshot, but not an error.
+  if (uniqueSymbols.length === 0) {
+    return NextResponse.json({
+      skipped: true,
+      reason: "no positions",
+    });
+  }
+
+  // Parallel fetch. We REQUIRE every quote to succeed — if any ticker comes
+  // back null, we abort the snapshot rather than recording an incomplete
+  // total. Recording with a missing quote treated as $0 was the source of
+  // the chart "drop to zero" artifact; better to have a small gap than a
+  // misleading row.
   const priceEntries = await Promise.all(
     uniqueSymbols.map(async (sym) => {
       const q = await fetchYahooQuote(sym);
       return [sym, q?.price ?? null] as const;
     }),
   );
+
+  const failedSymbols = priceEntries
+    .filter(([, price]) => typeof price !== "number" || !Number.isFinite(price))
+    .map(([sym]) => sym);
+
+  if (failedSymbols.length > 0) {
+    return NextResponse.json({
+      skipped: true,
+      reason: "incomplete data",
+      failedSymbols,
+    });
+  }
+
   const priceMap = new Map<string, number>();
   for (const [sym, price] of priceEntries) {
     if (typeof price === "number" && Number.isFinite(price)) {
@@ -69,6 +92,15 @@ export async function POST() {
     const price = priceMap.get(p.symbol);
     if (typeof price !== "number") continue;
     totalValue += p.quantity * price;
+  }
+
+  // Belt and suspenders — if we somehow computed zero (e.g. all positions
+  // were filtered above), skip rather than polluting the series.
+  if (totalValue <= 0) {
+    return NextResponse.json({
+      skipped: true,
+      reason: "incomplete data",
+    });
   }
 
   const { data: inserted, error: insErr } = await supabase
@@ -91,7 +123,7 @@ export async function POST() {
   });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -100,13 +132,21 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
+  const range = new URL(req.url).searchParams.get("range");
+  const isAll = range === "all";
+
+  let query = supabase
     .from("portfolio_snapshots")
     .select("total_value, taken_at")
     .eq("user_id", user.id)
-    .gte("taken_at", since)
     .order("taken_at", { ascending: true });
+
+  if (!isAll) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    query = query.gte("taken_at", since);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return NextResponse.json(

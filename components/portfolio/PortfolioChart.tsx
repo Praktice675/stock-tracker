@@ -20,7 +20,7 @@ type HistoryPoint = {
 type Timeframe = "1W" | "1M" | "3M" | "YTD" | "1Y" | "ALL";
 
 const TIMEFRAMES: Timeframe[] = ["1W", "1M", "3M", "YTD", "1Y", "ALL"];
-const ORANGE = "#FF6B1A";
+const ORANGE = "#ff6b3d";
 const SPY_GRAY = "#888888";
 
 function fmtAxisDollar(n: number): string {
@@ -123,7 +123,7 @@ export default function PortfolioChart({ hasTransactions }: Props) {
               borderRadius: "var(--border-radius)",
               padding: "6px 12px",
               color: showSpy
-                ? "rgb(var(--color-orange))"
+                ? "var(--accent)"
                 : "var(--text-muted)",
               cursor: "pointer",
               transition: "color 150ms ease, border-color 150ms ease",

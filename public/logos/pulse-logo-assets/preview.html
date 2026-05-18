@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pulse — logo asset preview</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/svg+xml" href="pulse-favicon.svg" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0d0f0d;
+    --surface: #1c1f1c;
+    --surface-2: #14171401;
+    --text: #e8e8e3;
+    --muted: #7a807a;
+    --border: #1f231f;
+    --border-strong: #2a2f2a;
+    --orange: #ff6b3d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; }
+  body { padding: 56px 48px 96px; min-height: 100vh; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .label-orange { color: var(--orange); }
+  .h1 { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 32px; letter-spacing: 0.04em; margin: 8px 0 0; }
+  .sub { color: var(--muted); font-size: 14px; margin: 14px 0 0; max-width: 640px; line-height: 1.6; }
+
+  h2.section { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--orange); margin: 56px 0 18px; font-weight: 600; }
+
+  .grid { display: grid; gap: 16px; }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid.cols-5 { grid-template-columns: repeat(5, 1fr); }
+  .grid.cols-6 { grid-template-columns: repeat(6, 1fr); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px 18px 18px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .card .swatch { display: flex; align-items: center; justify-content: center; }
+  .card .name { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--text); }
+  .card .meta { font-size: 11px; color: var(--muted); }
+  .card.light { background: #e8e8e3; }
+  .card.light .name { color: #0d0f0d; }
+  .card.light .meta { color: #5a5f5a; }
+
+  .file-row {
+    display: grid;
+    grid-template-columns: 96px 1fr auto;
+    gap: 20px;
+    align-items: center;
+    padding: 16px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .file-row + .file-row { margin-top: 8px; }
+  .file-row .preview { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: var(--bg); border: 1px solid var(--border); border-radius: 2px; }
+  .file-row .fname { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); }
+  .file-row .fdesc { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .file-row .fsize { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.1em; }
+
+  .lockup-demo {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+    padding: 48px; display: flex; align-items: center; justify-content: center;
+  }
+  .lockup-inline { display: inline-flex; align-items: center; gap: 16px; }
+  .lockup-inline .wm { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 36px; letter-spacing: 0.18em; color: var(--text); }
+
+  .browser-mock { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+  .browser-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #0a0c0a; border-bottom: 1px solid var(--border-strong); }
+  .browser-bar .dots { display: inline-flex; gap: 6px; }
+  .browser-bar .dot { width: 10px; height: 10px; border-radius: 50%; background: #2a2f2a; }
+  .browser-bar .tab { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 10px; background: var(--surface); border-radius: 6px 6px 0 0; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); margin-left: 18px; }
+  .browser-bar .tab svg { display: block; }
+  .browser-body { padding: 24px 28px; }
+  .browser-body h3 { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); margin: 0 0 8px; letter-spacing: 0.18em; }
+  .browser-body p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
+
+  pre.code {
+    background: #0a0c0a; border: 1px solid var(--border); border-radius: 4px;
+    padding: 20px 22px; overflow-x: auto;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.7;
+    color: var(--text); margin: 0;
+  }
+  pre.code .k { color: #ff6b3d; }
+  pre.code .s { color: #b8c0b0; }
+  pre.code .c { color: #555a55; }
+
+  .note { color: var(--muted); font-size: 12.5px; line-height: 1.6; max-width: 640px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="label label-orange">Concept 04 · Pierced Point</div>
+    <h1 class="h1">Pulse — logo files</h1>
+    <p class="sub">Production-ready assets for concept 4. Transparent backgrounds across the board; orange (#ff6b3d) is the default, with monochrome variants for any context. Optimized favicon geometry for sub-32px sizes.</p>
+  </header>
+
+  <h2 class="section">Primary mark</h2>
+  <div class="lockup-demo">
+    <img src="pulse-mark.svg" alt="Pulse" width="200" height="200" />
+  </div>
+
+  <h2 class="section">Lockup · mark + wordmark</h2>
+  <div class="lockup-demo">
+    <div class="lockup-inline">
+      <img src="pulse-mark.svg" alt="" width="56" height="56" />
+      <span class="wm">PULSE</span>
+    </div>
+  </div>
+  <p class="note" style="margin-top: 12px;">Lockup recipe: mark height = wordmark cap-height. Gap = 0.45× mark height. Wordmark in JetBrains Mono Bold 700, letter-spacing 0.18em.</p>
+
+  <h2 class="section">Variants</h2>
+  <div class="grid cols-4">
+    <div class="card">
+      <div class="swatch"><img src="pulse-mark.svg" width="72" height="72" alt="" /></div>
+      <div class="name">pulse-mark.svg</div>
+      <div class="meta">Orange / default</div>
+    </div>
+    <div class="card">
+      <div class="swatch" style="color: var(--orange)"><object data="pulse-mark-mono.svg" type="image/svg+xml" width="72" height="72"></object></div>
+      <div class="name">pulse-mark-mono.svg</div>
+      <div class="meta">currentColor stroke</div>
+    </div>
+    <div class="card">
+      <div class="swatch"><img src="pulse-mark-white.svg" width="72" height="72" alt="" /></div>
+      <div class="name">pulse-mark-white.svg</div>
+      <div class="meta">Off-white</div>
+    </div>
+    <div class="card light">
+      <div class="swatch"><img src="pulse-mark-black.svg" width="72" height="72" alt="" /></div>
+      <div class="name">pulse-mark-black.svg</div>
+      <div class="meta">On light surface</div>
+    </div>
+  </div>
+
+  <h2 class="section">Scale test · 16 → 256</h2>
+  <div class="grid cols-6">
+    <div class="card">
+      <div class="swatch" style="width: 80px; height: 80px;"><img src="pulse-favicon.svg" width="16" height="16" alt="" style="image-rendering: pixelated;" /></div>
+      <div class="name">16</div>
+      <div class="meta">favicon SVG</div>
+    </div>
+    <div class="card">
+      <div class="swatch" style="width: 80px; height: 80px;"><img src="pulse-favicon.svg" width="24" height="24" alt="" /></div>
+      <div class="name">24</div>
+      <div class="meta">favicon SVG</div>
+    </div>
+    <div class="card">
+      <div class="swatch" style="width: 80px; height: 80px;"><img src="pulse-mark.svg" width="32" height="32" alt="" /></div>
+      <div class="name">32</div>
+      <div class="meta">primary SVG</div>
+    </div>
+    <div class="card">
+      <div class="swatch" style="width: 96px; height: 96px;"><img src="pulse-mark.svg" width="64" height="64" alt="" /></div>
+      <div class="name">64</div>
+      <div class="meta">primary SVG</div>
+    </div>
+    <div class="card">
+      <div class="swatch" style="width: 144px; height: 144px;"><img src="pulse-mark.svg" width="128" height="128" alt="" /></div>
+      <div class="name">128</div>
+      <div class="meta">primary SVG</div>
+    </div>
+    <div class="card">
+      <div class="swatch" style="width: 160px; height: 160px;"><img src="pulse-mark.svg" width="160" height="160" alt="" /></div>
+      <div class="name">256+</div>
+      <div class="meta">primary SVG</div>
+    </div>
+  </div>
+
+  <h2 class="section">In context · browser tab</h2>
+  <div class="browser-mock">
+    <div class="browser-bar">
+      <span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
+      <span class="tab">
+        <img src="pulse-favicon.svg" width="14" height="14" alt="" />
+        Pulse — Real-time markets
+      </span>
+    </div>
+    <div class="browser-body">
+      <h3>Tab favicon</h3>
+      <p>The favicon SVG renders crisply in the chrome at 14–16px. At that size, the simplified geometry holds together because the stroke weight scales proportionally rather than collapsing to subpixel.</p>
+    </div>
+  </div>
+
+  <h2 class="section">File index</h2>
+
+  <div>
+    <div class="file-row">
+      <div class="preview"><img src="pulse-mark.svg" width="48" height="48" alt="" /></div>
+      <div>
+        <div class="fname">pulse-mark.svg</div>
+        <div class="fdesc">Default. Orange on transparent. Use this everywhere unless you have a specific reason not to.</div>
+      </div>
+      <div class="fsize">SVG</div>
+    </div>
+    <div class="file-row">
+      <div class="preview" style="color: var(--orange)"><object data="pulse-mark-mono.svg" type="image/svg+xml" width="48" height="48"></object></div>
+      <div>
+        <div class="fname">pulse-mark-mono.svg</div>
+        <div class="fdesc">Stroke uses <code class="mono">currentColor</code>. Inline it directly into HTML to color it via CSS.</div>
+      </div>
+      <div class="fsize">SVG</div>
+    </div>
+    <div class="file-row">
+      <div class="preview"><img src="pulse-mark-white.svg" width="48" height="48" alt="" /></div>
+      <div>
+        <div class="fname">pulse-mark-white.svg</div>
+        <div class="fdesc">Off-white (#e8e8e3). For dark surfaces where you don't want the orange to dominate.</div>
+      </div>
+      <div class="fsize">SVG</div>
+    </div>
+    <div class="file-row">
+      <div class="preview" style="background: #e8e8e3;"><img src="pulse-mark-black.svg" width="48" height="48" alt="" /></div>
+      <div>
+        <div class="fname">pulse-mark-black.svg</div>
+        <div class="fdesc">Near-black (#0d0f0d). For light backgrounds, print, single-color contexts.</div>
+      </div>
+      <div class="fsize">SVG</div>
+    </div>
+    <div class="file-row">
+      <div class="preview"><img src="pulse-favicon.svg" width="32" height="32" alt="" /></div>
+      <div>
+        <div class="fname">pulse-favicon.svg</div>
+        <div class="fdesc">Simplified geometry with proportionally thicker strokes. Use only at 16–32px.</div>
+      </div>
+      <div class="fsize">SVG</div>
+    </div>
+    <div class="file-row">
+      <div class="preview"><img src="pulse-lockup.svg" width="80" height="20" alt="" /></div>
+      <div>
+        <div class="fname">pulse-lockup.svg</div>
+        <div class="fdesc">Mark + PULSE wordmark, horizontal. Requires JetBrains Mono loaded on the host page for correct rendering.</div>
+      </div>
+      <div class="fsize">SVG</div>
+    </div>
+    <div class="file-row">
+      <div class="preview"><img src="png/pulse-128.png" width="48" height="48" alt="" /></div>
+      <div>
+        <div class="fname">png/pulse-{32,64,128,192,256,512}.png</div>
+        <div class="fdesc">Rasterized orange mark, transparent background. Use only when SVG isn't an option.</div>
+      </div>
+      <div class="fsize">PNG</div>
+    </div>
+    <div class="file-row">
+      <div class="preview"><img src="png/favicon-32.png" width="32" height="32" alt="" /></div>
+      <div>
+        <div class="fname">png/favicon-{16,32,48}.png</div>
+        <div class="fdesc">Rasterized favicon geometry. Pair with the SVG favicon for browser fallback.</div>
+      </div>
+      <div class="fsize">PNG</div>
+    </div>
+    <div class="file-row">
+      <div class="preview"><img src="png/apple-touch-icon.png" width="48" height="48" alt="" /></div>
+      <div>
+        <div class="fname">png/apple-touch-icon.png</div>
+        <div class="fdesc">180×180, transparent. iOS composites this on your web app manifest's theme color.</div>
+      </div>
+      <div class="fsize">PNG</div>
+    </div>
+  </div>
+
+  <h2 class="section">Drop-in: favicon</h2>
+<pre class="code"><span class="k">&lt;link</span> rel=<span class="s">"icon"</span> type=<span class="s">"image/svg+xml"</span> href=<span class="s">"/pulse-favicon.svg"</span> <span class="k">/&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"icon"</span> type=<span class="s">"image/png"</span> sizes=<span class="s">"32x32"</span> href=<span class="s">"/png/favicon-32.png"</span> <span class="k">/&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"icon"</span> type=<span class="s">"image/png"</span> sizes=<span class="s">"16x16"</span> href=<span class="s">"/png/favicon-16.png"</span> <span class="k">/&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"apple-touch-icon"</span> sizes=<span class="s">"180x180"</span> href=<span class="s">"/png/apple-touch-icon.png"</span> <span class="k">/&gt;</span></pre>
+
+  <h2 class="section">Drop-in: inline lockup</h2>
+<pre class="code"><span class="k">&lt;a</span> href=<span class="s">"/"</span> class=<span class="s">"brand"</span><span class="k">&gt;</span>
+  <span class="k">&lt;img</span> src=<span class="s">"/pulse-mark.svg"</span> alt=<span class="s">""</span> width=<span class="s">"28"</span> height=<span class="s">"28"</span> <span class="k">/&gt;</span>
+  <span class="k">&lt;span&gt;</span>PULSE<span class="k">&lt;/span&gt;</span>
+<span class="k">&lt;/a&gt;</span>
+
+<span class="c">/* CSS */</span>
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-family: <span class="s">'JetBrains Mono'</span>, ui-monospace, monospace;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: <span class="s">#e8e8e3</span>;
+}</pre>
+
+  <p class="note" style="margin-top: 56px;">Full usage notes and color tokens are in <span class="mono">README.md</span> inside the asset folder.</p>
+
+</div>
+</body>
+</html>

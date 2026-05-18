@@ -21,8 +21,8 @@ type EnrichedPosition = {
   gainLossPercent: number | null;
 };
 
-const POSITIVE = "#00FF94";
-const NEGATIVE = "#FF3B5C";
+const POSITIVE = "#4ade80";
+const NEGATIVE = "#ef4444";
 const PLACEHOLDER = "—";
 
 function formatMoney(n: number): string {
@@ -400,7 +400,7 @@ function PositionForm({
           width: "100%",
           height: "36px",
           marginTop: "4px",
-          backgroundColor: "rgb(var(--color-orange))",
+          backgroundColor: "var(--accent)",
           color: "rgb(var(--color-black))",
           border: "none",
           borderRadius: "var(--border-radius)",
@@ -579,7 +579,7 @@ function PositionCard({
         padding: "12px",
         borderBottom: "1px solid var(--border)",
         borderLeft: selected
-          ? "2px solid rgb(var(--color-orange))"
+          ? "2px solid var(--accent)"
           : "2px solid transparent",
         backgroundColor: selected ? "rgb(var(--color-grey-700))" : undefined,
       }}
@@ -619,7 +619,7 @@ function PositionCard({
         className="font-mono font-bold block"
         style={{
           fontSize: "12px",
-          color: "rgb(var(--color-orange))",
+          color: "var(--accent)",
           letterSpacing: "-0.015em",
         }}
       >
@@ -715,7 +715,7 @@ function PositionCard({
           style={{
             width: `${pctOfPortfolio}%`,
             height: "100%",
-            backgroundColor: "rgb(var(--color-orange))",
+            backgroundColor: "var(--accent)",
             transition: "width 200ms var(--ease)",
           }}
         />

@@ -13,6 +13,10 @@ export type YahooQuote = {
   changePercent: number;
   volume: number;
   previousClose: number;
+  open: number | null;
+  dayHigh: number | null;
+  dayLow: number | null;
+  exchange: string | null;
   name: string | null;
 };
 
@@ -74,12 +78,23 @@ export async function fetchYahooQuote(
       console.warn(`fetchYahooQuote: no price for ${ticker}`);
       return null;
     }
+    // fullExchangeName isn't on the SDK's public typings for v3 quote(),
+    // but Yahoo's payload reliably includes it. Cast and string-check.
+    const qx = q as typeof q & { fullExchangeName?: unknown };
+    const exchange =
+      typeof qx.fullExchangeName === "string" && qx.fullExchangeName.length > 0
+        ? qx.fullExchangeName
+        : null;
     return {
       price: q.regularMarketPrice,
       change: q.regularMarketChange ?? 0,
       changePercent: q.regularMarketChangePercent ?? 0,
       volume: q.regularMarketVolume ?? 0,
       previousClose: q.regularMarketPreviousClose ?? q.regularMarketPrice,
+      open: q.regularMarketOpen ?? null,
+      dayHigh: q.regularMarketDayHigh ?? null,
+      dayLow: q.regularMarketDayLow ?? null,
+      exchange,
       name: q.shortName ?? q.longName ?? null,
     };
   } catch (err) {

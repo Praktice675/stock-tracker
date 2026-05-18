@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pulse — transparency proof</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0d0f0d; color: #e8e8e3; font-family: 'Inter', system-ui, sans-serif; }
+  body { padding: 56px 48px 96px; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  .label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #7a807a; }
+  .label-orange { color: #ff6b3d; }
+  h1 { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 28px; letter-spacing: 0.04em; margin: 8px 0 14px; }
+  p.intro { color: #7a807a; font-size: 14px; line-height: 1.65; max-width: 640px; margin: 0 0 8px; }
+  p.intro b { color: #e8e8e3; font-weight: 600; }
+
+  h2 { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff6b3d; margin: 56px 0 14px; font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  .panel {
+    border-radius: 4px;
+    border: 1px solid #1f231f;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .panel .stage { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; }
+  .panel .cap { padding: 14px 16px; background: #1c1f1c; border-top: 1px solid #1f231f; }
+  .panel .cap .name { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e8e8e3; }
+  .panel .cap .meta { font-size: 11.5px; color: #7a807a; margin-top: 4px; line-height: 1.5; }
+
+  /* Backgrounds to prove the SVG carries no fill of its own */
+  .checker {
+    background-color: #ffffff;
+    background-image:
+      linear-gradient(45deg, #d8d8d8 25%, transparent 25%),
+      linear-gradient(-45deg, #d8d8d8 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #d8d8d8 75%),
+      linear-gradient(-45deg, transparent 75%, #d8d8d8 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  }
+  .photo {
+    background-image:
+      radial-gradient(circle at 30% 30%, #2d5a3a 0%, transparent 50%),
+      radial-gradient(circle at 70% 60%, #1f3a4d 0%, transparent 50%),
+      radial-gradient(circle at 50% 90%, #5a3a2d 0%, transparent 60%),
+      linear-gradient(135deg, #1a2418, #0d0f0d);
+  }
+  .light { background: #f5f3ee; }
+  .gradient { background: linear-gradient(135deg, #4ade80, #ff6b3d, #ef4444); }
+  .pure-white { background: #ffffff; }
+  .dark { background: #0d0f0d; }
+
+  .verdict {
+    margin-top: 56px;
+    padding: 24px 26px;
+    background: #1c1f1c;
+    border: 1px solid #1f231f;
+    border-left: 3px solid #ff6b3d;
+    border-radius: 4px;
+    max-width: 720px;
+  }
+  .verdict .k { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff6b3d; margin-bottom: 10px; }
+  .verdict p { margin: 0; line-height: 1.65; color: #e8e8e3; font-size: 14px; }
+  .verdict code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #ff6b3d; background: #0d0f0d; padding: 2px 6px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="label label-orange">Concept 04 · Pierced Point</div>
+  <h1>Same SVG, six backgrounds</h1>
+  <p class="intro">The file you already have is fully transparent — what you saw before was the preview page's dark background showing through. Below is the <b>exact same <code style="font-family:'JetBrains Mono',monospace;color:#ff6b3d">pulse-mark.svg</code></b> dropped onto six different surfaces. Notice how each background shows through cleanly behind and inside the open circle.</p>
+
+  <h2>Proof</h2>
+  <div class="grid">
+
+    <div class="panel">
+      <div class="stage checker"><img src="pulse-mark.svg" width="160" height="160" alt="" /></div>
+      <div class="cap">
+        <div class="name">Checkered (transparency pattern)</div>
+        <div class="meta">If you can see the pattern inside the circle and around the mark — it's transparent.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stage pure-white"><img src="pulse-mark.svg" width="160" height="160" alt="" /></div>
+      <div class="cap">
+        <div class="name">Pure white</div>
+        <div class="meta">No dark halo — confirms no opaque background baked in.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stage light"><img src="pulse-mark.svg" width="160" height="160" alt="" /></div>
+      <div class="cap">
+        <div class="name">Warm light surface</div>
+        <div class="meta">Drops cleanly onto any light brand color.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stage gradient"><img src="pulse-mark.svg" width="160" height="160" alt="" /></div>
+      <div class="cap">
+        <div class="name">Bold gradient</div>
+        <div class="meta">Survives any background — only the strokes are rendered.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stage photo"><img src="pulse-mark.svg" width="160" height="160" alt="" /></div>
+      <div class="cap">
+        <div class="name">Photographic backdrop</div>
+        <div class="meta">Same behaviour over imagery.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stage dark"><img src="pulse-mark.svg" width="160" height="160" alt="" /></div>
+      <div class="cap">
+        <div class="name">Pulse dark (#0d0f0d)</div>
+        <div class="meta">The intended home — but the file isn't tied to it.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="verdict">
+    <div class="k">TL;DR</div>
+    <p>Use <code>pulse-mark.svg</code> directly on your site — it's already transparent. Same goes for every PNG in <code>png/</code> (the 256px version is 81.8% fully-transparent pixels). No additional file needed.</p>
+  </div>
+
+</div>
+</body>
+</html>

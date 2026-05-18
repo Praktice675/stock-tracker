@@ -29,8 +29,8 @@ type Candle = {
 const TIMEFRAMES = ["1D", "1W", "1M", "3M", "1Y"] as const;
 type Timeframe = (typeof TIMEFRAMES)[number];
 
-const POSITIVE = "#00FF94";
-const NEGATIVE = "#FF3B5C";
+const POSITIVE = "#4ade80";
+const NEGATIVE = "#ef4444";
 
 type TickerConfig = {
   seed: number;
@@ -108,15 +108,23 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
   const [activeTf, setActiveTf] = useState<Timeframe>("1M");
   const [data, setData] = useState<Candle[]>(() => generateForTicker(selectedTicker));
   const [loading, setLoading] = useState(false);
-  // Header price + day-change come from /api/quote, NOT from the candles
-  // array. The candles array's last two entries shift shape with the
-  // selected range (1D = minute bars, 1M/1Y = daily bars), which would
-  // make the "current price" and "% change" drift when the user only
+  // Header price, day-change, and the OHLCV stat columns all come from
+  // /api/quote, NOT from the candles array. The candles array's last two
+  // entries shift shape with the selected range (1D = minute bars, 1M/1Y =
+  // daily bars), which would make these values drift when the user only
   // switches chart ranges. The quote is range-independent — always the
   // latest price + today-vs-yesterday change.
-  const [quote, setQuote] = useState<{ price: number; changePercent: number } | null>(
-    null,
-  );
+  type QuoteState = {
+    price: number;
+    changePercent: number;
+    open: number | null;
+    dayHigh: number | null;
+    dayLow: number | null;
+    volume: number;
+    name: string | null;
+    exchange: string | null;
+  };
+  const [quote, setQuote] = useState<QuoteState | null>(null);
 
   useEffect(() => {
     // Show mock immediately so the chart isn't blank during fetch
@@ -176,7 +184,17 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
           typeof json?.price === "number" &&
           typeof json?.changePercent === "number"
         ) {
-          setQuote({ price: json.price, changePercent: json.changePercent });
+          setQuote({
+            price: json.price,
+            changePercent: json.changePercent,
+            open: typeof json.open === "number" ? json.open : null,
+            dayHigh: typeof json.dayHigh === "number" ? json.dayHigh : null,
+            dayLow: typeof json.dayLow === "number" ? json.dayLow : null,
+            volume: typeof json.volume === "number" ? json.volume : 0,
+            name: typeof json.name === "string" ? json.name : null,
+            exchange:
+              typeof json.exchange === "string" ? json.exchange : null,
+          });
         }
       } catch (err) {
         console.warn(
@@ -219,6 +237,10 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
   const price = quote?.price ?? last.close;
   const changePct = quote?.changePercent ?? fallbackChangePct;
   const isPositive = changePct >= 0;
+  const displayName = quote?.name ?? selectedTicker;
+  const exchangeLabel = quote?.exchange
+    ? `${quote.exchange}: ${selectedTicker}`
+    : selectedTicker;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -291,7 +313,7 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
       time: c.time as Time,
       value: c.volume,
       color:
-        c.close >= c.open ? "rgba(0, 255, 148, 0.3)" : "rgba(255, 59, 92, 0.3)",
+        c.close >= c.open ? "rgba(74, 222, 128, 0.3)" : "rgba(239, 68, 68, 0.3)",
     }));
 
     candleSeries.setData(candleData);
@@ -302,10 +324,15 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
   return (
     <div className="flex h-full w-full flex-col">
       <Toolbar
-        ticker={selectedTicker}
+        name={displayName}
+        exchangeLabel={exchangeLabel}
         price={price}
         changePct={changePct}
         isPositive={isPositive}
+        open={quote?.open ?? null}
+        dayHigh={quote?.dayHigh ?? null}
+        dayLow={quote?.dayLow ?? null}
+        volume={quote?.volume ?? 0}
         activeTf={activeTf}
         onTfChange={setActiveTf}
       />
@@ -330,7 +357,7 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
               className="font-mono uppercase"
               style={{
                 fontSize: "11px",
-                color: "rgb(var(--color-orange))",
+                color: "var(--accent)",
                 letterSpacing: "0.2em",
               }}
             >
@@ -343,88 +370,216 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
   );
 }
 
+function fmtPrice(v: number | null): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return v.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function fmtVolume(v: number): string {
+  if (!Number.isFinite(v) || v <= 0) return "—";
+  if (v < 1000) return String(v);
+  if (v < 1_000_000) return `${Math.round(v / 1000)}k`;
+  if (v < 1_000_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  return `${(v / 1_000_000_000).toFixed(1)}B`;
+}
+
+function StatCol({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col" style={{ minWidth: 0 }}>
+      <span
+        className="font-mono uppercase"
+        style={{
+          fontSize: "9px",
+          letterSpacing: "0.25em",
+          color: "var(--text-muted)",
+          marginBottom: "4px",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        className="font-mono"
+        style={{
+          fontSize: "14px",
+          fontWeight: 600,
+          color: "var(--text-primary)",
+          letterSpacing: "-0.015em",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function Toolbar({
-  ticker,
+  name,
+  exchangeLabel,
   price,
   changePct,
   isPositive,
+  open,
+  dayHigh,
+  dayLow,
+  volume,
   activeTf,
   onTfChange,
 }: {
-  ticker: string;
+  name: string;
+  exchangeLabel: string;
   price: number;
   changePct: number;
   isPositive: boolean;
+  open: number | null;
+  dayHigh: number | null;
+  dayLow: number | null;
+  volume: number;
   activeTf: Timeframe;
   onTfChange: (tf: Timeframe) => void;
 }) {
-  const color = isPositive ? POSITIVE : NEGATIVE;
   const sign = isPositive ? "+" : "";
+  const pillBg = isPositive
+    ? "rgba(74, 222, 128, 0.12)"
+    : "rgba(239, 68, 68, 0.12)";
+  const pillColor = isPositive ? "var(--accent-green)" : "var(--accent-red)";
 
   return (
-    <div
-      className="flex shrink-0 items-center justify-between px-4"
-      style={{ height: "48px", borderBottom: "1px solid var(--border)" }}
-    >
-      <div className="flex items-center gap-3">
-        <span
-          className="font-mono font-bold"
+    <div className="flex shrink-0 flex-col">
+      {/* Header row: name+exchange / big price+pill / OHLCV columns.
+          Left side (name + price/pill) gets `flex: 1` and `flex-wrap` so
+          if a long company name + the price together don't fit on one
+          row, the price/pill cluster drops to a new line BELOW the name
+          rather than truncating the name. Stat columns sit on the far
+          right and never wrap. */}
+      <div
+        className="flex items-center"
+        style={{ marginBottom: "20px" }}
+      >
+        <div
+          className="flex flex-wrap items-center"
           style={{
-            fontSize: "16px",
-            color: "var(--accent)",
-            letterSpacing: "-0.015em",
+            gap: "24px",
+            flex: 1,
+            minWidth: 0,
+            marginRight: "32px",
           }}
         >
-          {ticker}
-        </span>
-        <span
-          className="font-mono text-text-primary"
-          style={{ fontSize: "14px", letterSpacing: "-0.015em" }}
-        >
-          {price.toFixed(2)}
-        </span>
-        <span
-          className="font-mono font-medium"
-          style={{
-            fontSize: "10px",
-            padding: "2px 6px",
-            borderRadius: "var(--border-radius)",
-            backgroundColor: `${color}26`,
-            color,
-            letterSpacing: "-0.015em",
-          }}
-        >
-          {sign}
-          {changePct.toFixed(2)}%
-        </span>
-      </div>
-
-      <div className="flex items-center gap-1">
-        {TIMEFRAMES.map((tf) => {
-          const active = tf === activeTf;
-          return (
-            <button
-              key={tf}
-              type="button"
-              onClick={() => onTfChange(tf)}
-              className={`font-mono uppercase transition-colors duration-150 ease-brand ${
-                active ? "" : "text-text-muted hover:text-text-primary"
-              }`}
+          <div className="flex flex-col" style={{ gap: "4px", flexShrink: 0 }}>
+            <span
               style={{
-                fontSize: "10px",
-                padding: "6px 8px",
-                letterSpacing: "0.1em",
-                color: active ? "rgb(var(--color-orange))" : undefined,
-                borderBottom: active
-                  ? "2px solid rgb(var(--color-orange))"
-                  : "2px solid transparent",
-                background: "transparent",
+                fontSize: "18px",
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                letterSpacing: "-0.015em",
+                whiteSpace: "nowrap",
               }}
             >
-              {tf}
-            </button>
-          );
-        })}
+              {name}
+            </span>
+            <span
+              className="font-mono uppercase"
+              style={{
+                fontSize: "10px",
+                letterSpacing: "0.2em",
+                color: "var(--text-muted)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {exchangeLabel}
+            </span>
+          </div>
+
+          <div
+            className="flex items-center"
+            style={{ gap: "12px", flexShrink: 0 }}
+          >
+            <span
+              className="font-mono"
+              style={{
+                fontSize: "20px",
+                fontWeight: 700,
+                color: "var(--text-primary)",
+                letterSpacing: "-0.015em",
+              }}
+            >
+              ${price.toFixed(2)}
+            </span>
+            <span
+              className="font-mono"
+              style={{
+                fontSize: "12px",
+                fontWeight: 700,
+                padding: "4px 10px",
+                borderRadius: "8px",
+                backgroundColor: pillBg,
+                color: pillColor,
+                letterSpacing: "-0.015em",
+              }}
+            >
+              {sign}
+              {changePct.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+
+        <div
+          className="flex items-center"
+          style={{ gap: "32px", flexShrink: 0 }}
+        >
+          <StatCol label="Open" value={fmtPrice(open)} />
+          <StatCol label="High" value={fmtPrice(dayHigh)} />
+          <StatCol label="Low" value={fmtPrice(dayLow)} />
+          <StatCol label="Volume" value={fmtVolume(volume)} />
+        </div>
+      </div>
+
+      {/* Period pills — segmented control, centered above the chart */}
+      <div
+        className="flex"
+        style={{ marginBottom: "16px", justifyContent: "center" }}
+      >
+        <div
+          className="flex"
+          style={{
+            width: "fit-content",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            padding: "4px",
+            gap: "2px",
+          }}
+        >
+          {TIMEFRAMES.map((tf) => {
+            const active = tf === activeTf;
+            return (
+              <button
+                key={tf}
+                type="button"
+                onClick={() => onTfChange(tf)}
+                className={`font-mono uppercase ease-brand ${
+                  active ? "" : "hover:text-text-primary"
+                }`}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  letterSpacing: "0.15em",
+                  background: active ? "var(--bg-surface)" : "transparent",
+                  color: active ? "var(--text-primary)" : "var(--text-muted)",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "all 150ms",
+                }}
+              >
+                {tf}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

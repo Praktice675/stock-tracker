@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Card from "@/components/ui/Card";
 
 type Stat = { label: string; value: string };
-type Rating = { label: string; pct: number; color: string };
+type Rating = { label: string; pct: number; barColor: string };
 type NewsItem = { headline: string; source: string; time: string };
 
 type Stats = {
@@ -30,7 +30,6 @@ type Stats = {
   } | null;
 };
 
-const MUTED_BAR = "rgb(var(--color-grey-300))";
 const PLACEHOLDER = "—";
 
 const formatMarketCap = (n: number | null): string =>
@@ -112,9 +111,9 @@ function buildRatings(f: Stats | null): Rating[] {
   const hold = (r?.hold ?? 0) * 100;
   const sell = (r?.sell ?? 0) * 100;
   return [
-    { label: "Buy", pct: buy, color: "#00FF94" },
-    { label: "Hold", pct: hold, color: MUTED_BAR },
-    { label: "Sell", pct: sell, color: "#FF3B5C" },
+    { label: "Buy", pct: buy, barColor: "var(--accent-green)" },
+    { label: "Hold", pct: hold, barColor: "var(--text-muted)" },
+    { label: "Sell", pct: sell, barColor: "var(--accent-red)" },
   ];
 }
 
@@ -200,7 +199,7 @@ export default function DetailPanel({ selectedTicker }: Props) {
         : loadingNews();
 
   return (
-    <div className="flex flex-col" style={{ gap: "16px" }}>
+    <div className="flex flex-col" style={{ gap: "12px" }}>
       <Header
         name={displayName}
         sector={displaySector}
@@ -227,30 +226,40 @@ function Header({
   ticker: string;
 }) {
   return (
-    <Card padding="16px">
+    <Card padding="20px">
       <div className="flex items-center gap-2">
         <span
-          className="text-text-primary font-bold"
-          style={{ fontSize: "14px", letterSpacing: "-0.015em" }}
+          className="font-bold"
+          style={{
+            fontSize: "14px",
+            letterSpacing: "-0.015em",
+            color: "var(--text-primary)",
+          }}
         >
           {name}
         </span>
         <span
-          className="text-text-muted"
           style={{
             fontSize: "10px",
             padding: "2px 8px",
-            backgroundColor: "rgb(var(--color-grey-800))",
-            borderRadius: "var(--border-radius)",
+            backgroundColor: "var(--bg-elevated)",
+            border: "1px solid var(--border)",
+            borderRadius: "6px",
             letterSpacing: "-0.015em",
+            color: "var(--text-muted)",
           }}
         >
           {sector}
         </span>
       </div>
       <div
-        className="text-text-muted font-mono"
-        style={{ fontSize: "10px", marginTop: "6px", letterSpacing: "-0.015em" }}
+        className="font-mono"
+        style={{
+          fontSize: "10px",
+          marginTop: "6px",
+          letterSpacing: "-0.015em",
+          color: "var(--text-muted)",
+        }}
       >
         {exchange}: {ticker}
       </div>
@@ -260,26 +269,39 @@ function Header({
 
 function StatsGrid({ stats }: { stats: Stat[] }) {
   return (
-    <Card padding="16px">
-      <div className="grid grid-cols-2 gap-x-4">
-        {stats.map((stat) => (
-          <div key={stat.label} style={{ paddingBottom: "16px" }}>
-            <div
-              className="text-text-muted uppercase"
-              style={{ fontSize: "9px", letterSpacing: "0.18em" }}
+    <Card padding="20px">
+      <div className="flex flex-col">
+        {stats.map((stat, i) => (
+          <div
+            key={stat.label}
+            className="flex items-center justify-between"
+            style={{
+              padding: "10px 0",
+              borderBottom:
+                i < stats.length - 1 ? "1px solid var(--border)" : "none",
+            }}
+          >
+            <span
+              className="font-mono uppercase"
+              style={{
+                fontSize: "10px",
+                letterSpacing: "0.18em",
+                color: "var(--text-muted)",
+              }}
             >
               {stat.label}
-            </div>
-            <div
-              className="text-text-primary font-mono"
+            </span>
+            <span
+              className="font-mono"
               style={{
                 fontSize: "13px",
+                fontWeight: 600,
                 letterSpacing: "-0.015em",
-                marginTop: "4px",
+                color: "var(--text-primary)",
               }}
             >
               {stat.value}
-            </div>
+            </span>
           </div>
         ))}
       </div>
@@ -304,10 +326,15 @@ function PerformanceRange({
   }
 
   return (
-    <Card padding="16px">
+    <Card padding="20px">
       <div
-        className="text-text-muted uppercase"
-        style={{ fontSize: "9px", letterSpacing: "0.18em" }}
+        className="font-mono uppercase"
+        style={{
+          fontSize: "10px",
+          letterSpacing: "0.25em",
+          marginBottom: "16px",
+          color: "var(--text-muted)",
+        }}
       >
         52W Range
       </div>
@@ -315,53 +342,51 @@ function PerformanceRange({
       <div
         style={{
           position: "relative",
-          height: "3px",
-          marginTop: "16px",
-          marginBottom: "16px",
-          backgroundColor: "rgb(var(--color-grey-800))",
-          borderRadius: "var(--border-radius)",
+          height: "6px",
+          width: "100%",
+          backgroundColor: "var(--bg-surface)",
+          borderRadius: "3px",
+          backgroundImage:
+            "linear-gradient(to right, var(--accent-green), var(--accent-red))",
         }}
       >
         {haveBounds && haveCurrent && (
-          <>
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                height: "100%",
-                width: `${pct}%`,
-                backgroundColor: "rgb(var(--color-orange))",
-                borderRadius: "var(--border-radius)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: `${pct}%`,
-                width: "10px",
-                height: "10px",
-                transform: "translate(-50%, -50%)",
-                backgroundColor: "rgb(var(--color-orange))",
-                borderRadius: "9999px",
-                boxShadow: "0 0 0 2px rgb(var(--color-black))",
-              }}
-            />
-          </>
+          <div
+            aria-label="current price"
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: `${pct}%`,
+              width: "2px",
+              height: "12px",
+              transform: "translate(-50%, -50%)",
+              backgroundColor: "var(--text-primary)",
+            }}
+          />
         )}
       </div>
 
-      <div className="flex justify-between">
+      <div
+        className="flex justify-between"
+        style={{ paddingTop: "8px" }}
+      >
         <span
-          className="text-text-muted font-mono"
-          style={{ fontSize: "9px", letterSpacing: "-0.015em" }}
+          className="font-mono"
+          style={{
+            fontSize: "11px",
+            letterSpacing: "-0.015em",
+            color: "var(--text-muted)",
+          }}
         >
           {range.low != null ? `$${range.low.toFixed(2)}` : PLACEHOLDER}
         </span>
         <span
-          className="text-text-muted font-mono"
-          style={{ fontSize: "9px", letterSpacing: "-0.015em" }}
+          className="font-mono"
+          style={{
+            fontSize: "11px",
+            letterSpacing: "-0.015em",
+            color: "var(--text-muted)",
+          }}
         >
           {range.high != null ? `$${range.high.toFixed(2)}` : PLACEHOLDER}
         </span>
@@ -378,13 +403,14 @@ function AnalystRatings({
   loading: boolean;
 }) {
   return (
-    <Card padding="16px">
+    <Card padding="20px">
       <div
-        className="text-text-muted uppercase"
+        className="font-mono uppercase"
         style={{
-          fontSize: "9px",
-          letterSpacing: "0.18em",
+          fontSize: "10px",
+          letterSpacing: "0.25em",
           marginBottom: "12px",
+          color: "var(--text-muted)",
         }}
       >
         Analyst Ratings
@@ -394,11 +420,11 @@ function AnalystRatings({
         {ratings.map((r) => (
           <div key={r.label} className="flex items-center gap-3">
             <span
-              className="text-text-muted"
               style={{
                 fontSize: "10px",
                 width: "32px",
                 letterSpacing: "-0.015em",
+                color: "var(--text-muted)",
               }}
             >
               {r.label}
@@ -407,9 +433,9 @@ function AnalystRatings({
               className="flex-1"
               style={{
                 position: "relative",
-                height: "3px",
-                backgroundColor: "rgb(var(--color-grey-800))",
-                borderRadius: "var(--border-radius)",
+                height: "4px",
+                backgroundColor: "var(--bg-surface)",
+                borderRadius: "2px",
               }}
             >
               <div
@@ -419,18 +445,19 @@ function AnalystRatings({
                   left: 0,
                   height: "100%",
                   width: `${r.pct}%`,
-                  backgroundColor: r.color,
-                  borderRadius: "var(--border-radius)",
+                  backgroundColor: r.barColor,
+                  borderRadius: "2px",
                 }}
               />
             </div>
             <span
-              className="text-text-primary font-mono"
+              className="font-mono"
               style={{
                 fontSize: "10px",
                 width: "32px",
                 textAlign: "right",
                 letterSpacing: "-0.015em",
+                color: "var(--text-primary)",
               }}
             >
               {loading ? PLACEHOLDER : `${Math.round(r.pct)}%`}
@@ -444,13 +471,14 @@ function AnalystRatings({
 
 function LatestNews({ news }: { news: NewsItem[] }) {
   return (
-    <Card padding="16px">
+    <Card padding="20px">
       <div
-        className="text-text-muted uppercase"
+        className="font-mono uppercase"
         style={{
-          fontSize: "9px",
-          letterSpacing: "0.18em",
+          fontSize: "10px",
+          letterSpacing: "0.25em",
           marginBottom: "12px",
+          color: "var(--text-muted)",
         }}
       >
         Latest News
@@ -468,23 +496,25 @@ function LatestNews({ news }: { news: NewsItem[] }) {
             }}
           >
             <h3
-              className="text-text-primary line-clamp-2 transition-colors duration-150 ease-brand group-hover:text-accent"
+              className="line-clamp-3 transition-colors duration-150 ease-brand group-hover:text-accent"
               style={{
-                fontSize: "11px",
+                fontSize: "13px",
                 lineHeight: 1.4,
                 letterSpacing: "-0.015em",
                 margin: 0,
                 fontWeight: 500,
+                color: "var(--text-primary)",
               }}
             >
               {n.headline}
             </h3>
             <div
-              className="text-text-muted"
+              className="font-mono uppercase"
               style={{
-                fontSize: "9px",
-                marginTop: "6px",
-                letterSpacing: "-0.015em",
+                fontSize: "10px",
+                marginTop: "4px",
+                letterSpacing: "0.05em",
+                color: "var(--text-muted)",
               }}
             >
               {n.source}

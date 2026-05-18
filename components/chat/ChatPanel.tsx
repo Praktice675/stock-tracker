@@ -227,11 +227,11 @@ export default function ChatPanel({ userId, onClose }: Props) {
           <div
             style={{
               padding: "8px 12px",
-              backgroundColor: "rgba(255, 59, 92, 0.08)",
-              border: "1px solid rgba(255, 59, 92, 0.25)",
+              backgroundColor: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.25)",
               borderRadius: "8px",
               fontSize: "12px",
-              color: "#FF3B5C",
+              color: "#ef4444",
               fontFamily: "var(--font-mono), monospace",
               letterSpacing: "-0.015em",
             }}
@@ -283,7 +283,7 @@ export default function ChatPanel({ userId, onClose }: Props) {
             borderRadius: "8px",
             backgroundColor:
               input.trim() && !loading
-                ? "#FF6B1A"
+                ? "#ff6b3d"
                 : "rgba(255, 255, 255, 0.05)",
             color:
               input.trim() && !loading
@@ -322,7 +322,7 @@ function Bubble({ message }: { message: ChatMessage }) {
           maxWidth: isUser ? "80%" : "92%",
           padding: "10px 14px",
           borderRadius: "12px",
-          backgroundColor: isUser ? "#FF6B1A" : "rgba(255, 255, 255, 0.04)",
+          backgroundColor: isUser ? "#ff6b3d" : "rgba(255, 255, 255, 0.04)",
           color: isUser ? "#000" : "var(--text-primary)",
           fontSize: "13px",
           lineHeight: 1.55,

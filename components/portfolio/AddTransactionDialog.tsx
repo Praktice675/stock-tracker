@@ -81,7 +81,7 @@ export default function AddTransactionDialog({ variant = "primary" }: Props) {
           padding: variant === "cta" ? "14px 28px" : "10px 18px",
           fontSize: variant === "cta" ? "13px" : "11px",
           letterSpacing: "0.2em",
-          backgroundColor: "rgb(var(--color-orange))",
+          backgroundColor: "var(--accent)",
           color: "rgb(var(--color-black))",
           border: "none",
           borderRadius: "var(--border-radius)",
@@ -122,7 +122,7 @@ export default function AddTransactionDialog({ variant = "primary" }: Props) {
                 fontSize: "12px",
                 fontWeight: 700,
                 letterSpacing: "0.22em",
-                color: "rgb(var(--color-orange))",
+                color: "var(--accent)",
                 margin: 0,
                 marginBottom: "20px",
               }}
@@ -198,7 +198,7 @@ export default function AddTransactionDialog({ variant = "primary" }: Props) {
               {error && (
                 <div
                   style={{
-                    color: "#FF3B5C",
+                    color: "#ef4444",
                     fontFamily: "var(--font-mono), monospace",
                     fontSize: "11px",
                     letterSpacing: "-0.015em",
@@ -238,7 +238,7 @@ export default function AddTransactionDialog({ variant = "primary" }: Props) {
                   style={{
                     height: "36px",
                     padding: "0 18px",
-                    backgroundColor: "rgb(var(--color-orange))",
+                    backgroundColor: "var(--accent)",
                     color: "rgb(var(--color-black))",
                     border: "none",
                     borderRadius: "var(--border-radius)",
@@ -311,11 +311,11 @@ function TypeButton({
         flex: 1,
         height: "32px",
         backgroundColor: active
-          ? "rgb(var(--color-orange))"
+          ? "var(--accent)"
           : "transparent",
         color: active ? "rgb(var(--color-black))" : "var(--text-muted)",
         border: active
-          ? "1px solid rgb(var(--color-orange))"
+          ? "1px solid var(--accent)"
           : "1px solid var(--border)",
         borderRadius: "var(--border-radius)",
         fontSize: "11px",

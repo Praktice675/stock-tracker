@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
+import CountUp from "@/components/ui/CountUp";
 import type { BrokeragePosition } from "@/lib/portfolio/brokerage";
 
 type Props = {
@@ -238,10 +239,14 @@ export default function BrokerageHoldings({ positions, hasConnections }: Props) 
                   {fmtMoney(displayPrice)}
                 </div>
                 <div
-                  className="font-mono"
+                  className="font-mono tabular-nums"
                   style={{ textAlign: "right", fontWeight: 700 }}
                 >
-                  {fmtMoney(displayValue)}
+                  {displayValue == null || Number.isNaN(displayValue) ? (
+                    "—"
+                  ) : (
+                    <CountUp value={displayValue} decimals={2} />
+                  )}
                 </div>
               </div>
             );

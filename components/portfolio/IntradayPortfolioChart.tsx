@@ -15,8 +15,8 @@ type Point = { totalValue: number; takenAt: string };
 
 type ApiResponse = { points?: Point[] };
 
-const POSITIVE = "#00FF94";
-const NEGATIVE = "#FF3B5C";
+const POSITIVE = "#4ade80";
+const NEGATIVE = "#ef4444";
 
 function fmtMoney(n: number): string {
   return (

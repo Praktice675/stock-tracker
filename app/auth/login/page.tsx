@@ -35,7 +35,15 @@ export default function LoginPage() {
   return (
     <div className="auth-root">
       <div className="auth-card">
-        <Link href="/landing" className="auth-logo">PULSE</Link>
+        <Link href="/landing" className="auth-logo" aria-label="Pulse home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logos/pulse-lockup.svg"
+            alt="Pulse"
+            height={32}
+            style={{ display: "block", height: 32, width: "auto" }}
+          />
+        </Link>
         <h1 className="auth-heading">Sign in</h1>
         <p className="auth-sub">Welcome back to Pulse.</p>
 

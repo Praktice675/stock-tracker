@@ -5,7 +5,7 @@ import type { Holding } from "@/lib/portfolio/compute";
 
 // Brand orange for the largest slice, then a complementary cycle.
 const PALETTE = [
-  "#FF6B1A",
+  "#ff6b3d",
   "#00D084",
   "#3F8CFF",
   "#A682FF",

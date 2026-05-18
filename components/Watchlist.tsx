@@ -21,9 +21,6 @@ type LiveQuote = {
 
 type SearchResult = { ticker: string; name: string };
 
-const POSITIVE = "#00FF94";
-const NEGATIVE = "#FF3B5C";
-
 type WatchlistProps = {
   selectedTicker: string;
   onSelect: (ticker: string) => void;
@@ -405,7 +402,13 @@ export default function Watchlist({
 
       <div
         className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden"
-        style={{ scrollbarWidth: "none" }}
+        style={{
+          scrollbarWidth: "none",
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          padding: "4px 8px 8px",
+        }}
       >
         {watchlist.map((stock) => (
           <StockCard
@@ -519,7 +522,7 @@ function SearchResultRow({
         className="font-mono font-bold"
         style={{
           fontSize: "12px",
-          color: "rgb(var(--color-orange))",
+          color: "var(--accent)",
           letterSpacing: "-0.015em",
           flexShrink: 0,
         }}
@@ -532,7 +535,7 @@ function SearchResultRow({
           className="font-mono"
           style={{
             fontSize: "10px",
-            color: "rgb(var(--color-orange))",
+            color: "var(--accent)",
             letterSpacing: "-0.015em",
             textAlign: "right",
           }}
@@ -604,7 +607,7 @@ function PillButton({
         cursor: "pointer",
         letterSpacing: "-0.015em",
         backgroundColor: isPrimary
-          ? "rgb(var(--color-orange))"
+          ? "var(--accent)"
           : "rgb(var(--color-grey-700))",
         color: isPrimary
           ? "rgb(var(--color-black))"
@@ -641,8 +644,18 @@ function StockCard({
 
   const changePercent = hasLive ? quote.changePercent : 0;
   const isPositive = changePercent >= 0;
-  const color = isPositive ? POSITIVE : NEGATIVE;
   const sign = isPositive ? "+" : "";
+
+  const pillBg = showPlaceholder
+    ? "var(--bg-surface)"
+    : isPositive
+      ? "color-mix(in srgb, var(--accent-green) 15%, transparent)"
+      : "color-mix(in srgb, var(--accent-red) 15%, transparent)";
+  const pillColor = showPlaceholder
+    ? "var(--text-muted)"
+    : isPositive
+      ? "var(--accent-green)"
+      : "var(--accent-red)";
 
   return (
     <div
@@ -655,21 +668,8 @@ function StockCard({
           onSelect();
         }
       }}
-      className={`group relative cursor-pointer transition-colors duration-150 ease-brand ${
-        selected ? "" : "hover:bg-[rgb(var(--color-grey-800))]"
-      }`}
-      style={{
-        padding: "12px",
-        // 2px colored gain/loss accent at the bottom (neutral when quote
-        // hasn't loaded yet so first paint isn't misleadingly green).
-        borderBottom: showPlaceholder
-          ? "2px solid var(--border)"
-          : `2px solid ${color}`,
-        borderLeft: selected
-          ? "2px solid rgb(var(--color-orange))"
-          : "2px solid transparent",
-        backgroundColor: selected ? "rgb(var(--color-grey-700))" : undefined,
-      }}
+      className="watchlist-row group relative"
+      data-selected={selected ? "true" : "false"}
     >
       {canRemove && (
         <button
@@ -683,7 +683,7 @@ function StockCard({
           className="opacity-0 transition-opacity duration-150 ease-brand group-hover:opacity-100"
           style={{
             position: "absolute",
-            top: "8px",
+            top: "6px",
             right: "8px",
             width: "16px",
             height: "16px",
@@ -703,89 +703,91 @@ function StockCard({
         </button>
       )}
 
-      <div className="flex items-center" style={{ gap: "8px" }}>
-        <CompanyLogo ticker={stock.ticker} size={24} />
+      <CompanyLogo ticker={stock.ticker} size={28} />
 
-        <div
-          className="flex flex-col"
-          style={{ flex: 1, minWidth: 0, gap: "2px" }}
-        >
-          <span
-            className="font-mono font-bold uppercase text-text-primary"
-            style={{ fontSize: "13px", letterSpacing: "-0.015em" }}
-          >
-            {stock.ticker}
-          </span>
-          <span
-            className="text-text-muted"
-            style={{
-              fontSize: "10px",
-              letterSpacing: "-0.015em",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {stock.name}
-          </span>
-        </div>
-
-        {/* Fixed-width slot so the row doesn't reflow when the sparkline loads */}
-        <div
+      <div
+        className="flex flex-col"
+        style={{ minWidth: 0, gap: "2px" }}
+      >
+        <span
+          className="font-mono font-bold uppercase"
           style={{
-            width: 64,
-            height: 24,
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
+            fontSize: "13px",
+            letterSpacing: "-0.015em",
+            color: "var(--text-primary)",
           }}
         >
-          <Sparkline
-            data={sparkData ?? []}
-            positive={isPositive}
-            width={64}
-          />
-        </div>
-
-        <div
-          className="flex flex-col items-end"
-          style={{ gap: "2px", flexShrink: 0 }}
+          {stock.ticker}
+        </span>
+        <span
+          style={{
+            fontSize: "11px",
+            letterSpacing: "-0.015em",
+            color: "var(--text-muted)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
         >
-          <span
-            className={`font-mono text-text-primary ${
-              flashDirection === "green"
-                ? "flash-green"
-                : flashDirection === "red"
-                  ? "flash-red"
-                  : ""
-            }`}
-            style={{
-              fontSize: "13px",
-              letterSpacing: "-0.015em",
-              padding: "0 2px",
-              display: "inline-block",
-            }}
-          >
-            {showPlaceholder ? "---" : quote!.price.toFixed(2)}
-          </span>
-          <span
-            className={`font-mono font-medium ${
-              flashDirection ? "flash-badge" : ""
-            }`}
-            style={{
-              fontSize: "10px",
-              padding: "2px 6px",
-              borderRadius: "var(--border-radius)",
-              backgroundColor: showPlaceholder
-                ? "rgb(var(--color-grey-800))"
-                : `${color}26`,
-              color: showPlaceholder ? "var(--text-muted)" : color,
-              letterSpacing: "-0.015em",
-            }}
-          >
-            {showPlaceholder ? "---" : `${sign}${changePercent.toFixed(2)}%`}
-          </span>
-        </div>
+          {stock.name}
+        </span>
+      </div>
+
+      {/* Fixed-width slot so the row doesn't reflow when the sparkline loads */}
+      <div
+        style={{
+          width: 64,
+          height: 20,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        <Sparkline
+          data={sparkData ?? []}
+          positive={isPositive}
+          width={64}
+          height={20}
+        />
+      </div>
+
+      <div
+        className="flex flex-col items-end"
+        style={{ gap: "3px", flexShrink: 0 }}
+      >
+        <span
+          className={`font-mono ${
+            flashDirection === "green"
+              ? "flash-green"
+              : flashDirection === "red"
+                ? "flash-red"
+                : ""
+          }`}
+          style={{
+            fontSize: "13px",
+            fontWeight: 700,
+            letterSpacing: "-0.015em",
+            color: "var(--text-primary)",
+            padding: "0 2px",
+            display: "inline-block",
+          }}
+        >
+          {showPlaceholder ? "---" : quote!.price.toFixed(2)}
+        </span>
+        <span
+          className={`font-mono ${flashDirection ? "flash-badge" : ""}`}
+          style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            padding: "1px 6px",
+            borderRadius: "6px",
+            backgroundColor: pillBg,
+            color: pillColor,
+            letterSpacing: "-0.015em",
+          }}
+        >
+          {showPlaceholder ? "---" : `${sign}${changePercent.toFixed(2)}%`}
+        </span>
       </div>
     </div>
   );

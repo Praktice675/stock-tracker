@@ -12,16 +12,16 @@
   --color-grey-900: 19, 17, 20;
   --color-black: 12, 11, 17;
 
-  /* Semantic tokens */
-  --bg-primary: rgb(var(--color-black));
-  --bg-surface: rgb(var(--color-grey-900));
-  --bg-elevated: rgb(var(--color-grey-800));
-  --accent: rgb(var(--color-orange));
-  --accent-green: #00FF94;
-  --accent-red: #FF3B5C;
-  --text-primary: rgb(var(--color-grey-50));
-  --text-muted: rgb(var(--color-grey-300));
-  --border: rgba(255, 255, 255, 0.06);
+  /* Semantic tokens — Phase D palette refresh (Semusim-inspired warm dark). */
+  --bg-primary: #0d0f0d;
+  --bg-surface: #14171526;
+  --bg-elevated: #1c1f1c;
+  --accent: #ff6b3d;
+  --accent-green: #4ade80;
+  --accent-red: #ef4444;
+  --text-primary: #e8e8e3;
+  --text-muted: #7a807a;
+  --border: #1f231f;
 
   /* Typography */
   --body-letter-spacing: -0.015em;
@@ -40,7 +40,11 @@
 }
 
 body {
-  background-color: var(--bg-primary);
+  /* Soft warm-green glow in the top-left corner over bg-primary —
+     gives every page the Semusim-style ambient warmth. */
+  background:
+    radial-gradient(ellipse 800px 600px at 0% 0%, rgba(74, 222, 128, 0.08), transparent 50%),
+    var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-mono), monospace;
   letter-spacing: var(--body-letter-spacing);
@@ -77,30 +81,15 @@ body {
   --ease-link: cubic-bezier(.4, 0, .25, 1);
 }
 
-@keyframes live-pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.35;
-    transform: scale(0.85);
-  }
-}
-
-.live-dot {
-  animation: live-pulse 1.6s var(--ease) infinite;
-}
-
 @keyframes flashGreen {
   0% { background-color: transparent; color: inherit; }
-  20% { background-color: rgba(0, 255, 148, 0.25); color: #00FF94; }
+  20% { background-color: rgba(74, 222, 128, 0.25); color: var(--accent-green); }
   100% { background-color: transparent; color: inherit; }
 }
 
 @keyframes flashRed {
   0% { background-color: transparent; color: inherit; }
-  20% { background-color: rgba(255, 59, 92, 0.25); color: #FF3B5C; }
+  20% { background-color: rgba(239, 68, 68, 0.25); color: var(--accent-red); }
   100% { background-color: transparent; color: inherit; }
 }
 
@@ -121,6 +110,30 @@ body {
 
 .flash-badge {
   animation: flashBadge 600ms ease-out forwards;
+}
+
+/* ---------- Watchlist row card (Semusim-style) ---------- */
+.watchlist-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 150ms var(--ease), background-color 150ms var(--ease);
+}
+.watchlist-row:hover {
+  border-color: var(--text-muted);
+}
+.watchlist-row[data-selected="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
+}
+.watchlist-row[data-selected="true"]:hover {
+  border-color: var(--accent);
 }
 
 /* ---------- Earnings strip (dashboard header) ---------- */
@@ -228,8 +241,9 @@ body {
 .indices-marquee {
   width: 100%;
   flex-shrink: 0;
-  background-color: var(--bg-primary);
-  border-bottom: 1px solid #27272a;
+  /* No solid bg — body's radial glow shows through the top-left chrome. */
+  background-color: transparent;
+  border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -280,119 +294,123 @@ body {
 
 /* ---------- Dashboard sidebar ---------- */
 .dashboard-sidebar {
-  width: 220px;
+  width: 240px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-primary);
-  border-right: 1px solid #27272a;
-  padding: 20px 0;
+  /* Transparent — body's radial glow tints the top-left of the sidebar. */
+  background-color: transparent;
+  border-right: 1px solid var(--border);
+  padding: 16px 0;
   height: 100%;
+  transition: width 200ms ease-out;
 }
-
-.dashboard-sidebar__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 20px;
-  margin-bottom: 28px;
-  font-family: var(--font-mono), monospace;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgb(var(--color-orange));
-  text-decoration: none;
-  flex-shrink: 0;
-}
-.dashboard-sidebar__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: rgb(var(--color-orange));
-  display: inline-block;
+.dashboard-sidebar[data-collapsed="true"] {
+  width: 72px;
 }
 
 .dashboard-sidebar__nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 0 10px;
 }
-
-.dashboard-sidebar__bottom {
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid #27272a;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+[data-collapsed="true"] .dashboard-sidebar__nav {
+  padding: 0 8px;
 }
-
-.dashboard-sidebar__user {
-  padding: 14px 20px 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.dashboard-sidebar__email {
-  font-family: var(--font-mono), monospace;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 180px;
-}
-
-.dashboard-sidebar__signout {
-  font-family: var(--font-mono), monospace;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
-  transition: color 150ms ease;
-}
-.dashboard-sidebar__signout:hover { color: #FFFFFF; }
 
 /* Shared sidebar entry style — used by NAV links AND the Ask Pulse button */
 .sidebar-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 18px;
+  padding: 10px 14px;
+  border-radius: 10px;
   font-family: var(--font-mono), monospace;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--text-muted);
   background: transparent;
   border: none;
-  border-left: 2px solid transparent;
   text-decoration: none;
   cursor: pointer;
   width: 100%;
   text-align: left;
   transition:
-    color 150ms ease,
-    background-color 150ms ease,
-    border-color 150ms ease;
+    color 150ms ease-out,
+    background-color 150ms ease-out;
+}
+.sidebar-item > svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: color 150ms ease-out;
 }
 .sidebar-item:hover {
-  color: #D4D4D8;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+.sidebar-item:hover > svg {
+  color: var(--text-primary);
 }
 .sidebar-item[data-active] {
-  color: #FFFFFF;
-  background-color: rgba(255, 107, 26, 0.08);
-  border-left-color: rgb(var(--color-orange));
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+.sidebar-item[data-active] > svg {
+  color: var(--text-primary);
+}
+.sidebar-item[data-active]::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+[data-collapsed="true"] .sidebar-item {
+  justify-content: center;
+  padding: 10px 0;
+}
+[data-collapsed="true"] .sidebar-item[data-active]::before {
+  left: -8px;
+}
+
+/* Status pill — market open/closed indicator */
+@keyframes status-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.85); }
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: status-dot-pulse 2s ease-in-out infinite;
+}
+
+/* Upgrade card radial highlight */
+.upgrade-card {
+  position: relative;
+  overflow: hidden;
+}
+.upgrade-card::before {
+  content: "";
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 80px;
+  height: 80px;
+  background: var(--accent);
+  opacity: 0.2;
+  filter: blur(40px);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 /* ---------- Dashboard top bar ---------- */
@@ -401,8 +419,9 @@ body {
   display: flex;
   align-items: center;
   padding: 0 24px;
-  background-color: var(--bg-primary);
-  border-bottom: 1px solid #1a1a1f;
+  /* Transparent — body's radial glow shows through. */
+  background-color: transparent;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 .dashboard-topbar__title {

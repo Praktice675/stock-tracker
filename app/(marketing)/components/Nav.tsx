@@ -49,8 +49,14 @@ export default function Nav() {
 
   return (
     <nav className={`pulse-nav${scrolled ? " scrolled" : ""}`}>
-      <Link href="/" className="pulse-nav__logo">
-        PULSE
+      <Link href="/" className="pulse-nav__logo" aria-label="Pulse home">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logos/pulse-lockup.svg"
+          alt="Pulse"
+          height={24}
+          style={{ display: "block", height: 24, width: "auto" }}
+        />
       </Link>
       <div className="pulse-nav__right">
         {user ? (

@@ -8,7 +8,7 @@ import { useGSAP } from "@gsap/react";
 const WORD = "PULSE";
 
 // Brand colors.
-const ACCENT: [number, number, number] = [255, 107, 26]; // #FF6B1A
+const ACCENT: [number, number, number] = [255, 107, 26]; // #ff6b3d
 const GREEN: [number, number, number] = [0, 208, 132]; // #00D084
 const RED: [number, number, number] = [255, 51, 85]; // #FF3355
 

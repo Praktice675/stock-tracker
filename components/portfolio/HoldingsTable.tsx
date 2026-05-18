@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import type { Holding } from "@/lib/portfolio/compute";
 
-const POSITIVE = "#00FF94";
-const NEGATIVE = "#FF3B5C";
+const POSITIVE = "#4ade80";
+const NEGATIVE = "#ef4444";
 
 type SortKey =
   | "ticker"
@@ -184,7 +184,7 @@ export default function HoldingsTable({ holdings }: { holdings: Holding[] }) {
               <td
                 style={{
                   padding: "12px",
-                  color: "rgb(var(--color-orange))",
+                  color: "var(--accent)",
                   fontWeight: 700,
                   letterSpacing: "0.04em",
                 }}
@@ -274,7 +274,7 @@ function Th({
         style={{
           marginLeft: "4px",
           color: active
-            ? "rgb(var(--color-orange))"
+            ? "var(--accent)"
             : "rgba(255, 255, 255, 0.18)",
         }}
       >
