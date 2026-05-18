@@ -82,6 +82,39 @@ create policy "Users can delete own transactions" on public.portfolio_transactio
   for delete using (auth.uid() = user_id);
 
 -- ------------------------------------------------------------------
+-- Phase B1: brokerage connections (SnapTrade)
+-- Run the section below in the SQL editor before testing the new flow.
+-- ------------------------------------------------------------------
+create table public.brokerage_connections (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  snaptrade_user_id text not null,
+  snaptrade_user_secret text not null,
+  -- 'pending' until SnapTrade hands the user back to us with a real auth id.
+  authorization_id text not null,
+  broker_slug text not null default '',
+  broker_name text not null default '',
+  connected_at timestamptz not null default now(),
+  last_synced_at timestamptz,
+  status text not null default 'active',
+  disabled_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index brokerage_connections_user_id_idx on public.brokerage_connections(user_id);
+
+alter table public.brokerage_connections enable row level security;
+
+create policy "users see own connections" on public.brokerage_connections
+  for select using (auth.uid() = user_id);
+create policy "users insert own connections" on public.brokerage_connections
+  for insert with check (auth.uid() = user_id);
+create policy "users update own connections" on public.brokerage_connections
+  for update using (auth.uid() = user_id);
+create policy "users delete own connections" on public.brokerage_connections
+  for delete using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------
 -- Chat quota: per-user daily message counter for /api/chat rate limit.
 -- INSERTs/UPDATEs run via the service role from the server route so the
 -- only client-facing policy is SELECT.

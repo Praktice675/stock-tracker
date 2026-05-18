@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import DashboardChrome from "@/components/DashboardChrome";
 import AddTransactionDialog from "@/components/portfolio/AddTransactionDialog";
 import AllocationChart from "@/components/portfolio/AllocationChart";
+import BrokerageConnections from "@/components/portfolio/BrokerageConnections";
 import HoldingsTable from "@/components/portfolio/HoldingsTable";
 import MetricsStrip from "@/components/portfolio/MetricsStrip";
 import PortfolioChart from "@/components/portfolio/PortfolioChart";
@@ -30,6 +31,8 @@ export default async function PortfolioPage() {
         className="flex w-full flex-col overflow-y-auto"
         style={{ padding: "24px 24px 48px" }}
       >
+        <BrokerageConnections />
+
         {data.hasAnyTransaction ? (
           <>
             <div
