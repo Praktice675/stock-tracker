@@ -80,3 +80,25 @@ create policy "Users can update own transactions" on public.portfolio_transactio
   for update using (auth.uid() = user_id);
 create policy "Users can delete own transactions" on public.portfolio_transactions
   for delete using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------
+-- Chat quota: per-user daily message counter for /api/chat rate limit.
+-- INSERTs/UPDATEs run via the service role from the server route so the
+-- only client-facing policy is SELECT.
+-- ------------------------------------------------------------------
+create table public.chat_usage (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  usage_date date not null default current_date,
+  message_count int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, usage_date)
+);
+
+create index chat_usage_user_id_date_idx on public.chat_usage(user_id, usage_date);
+
+alter table public.chat_usage enable row level security;
+
+create policy "users see own usage" on public.chat_usage
+  for select using (auth.uid() = user_id);

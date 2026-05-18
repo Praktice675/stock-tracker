@@ -7,7 +7,8 @@ const yf = new YahooFinance({
   suppressNotices: ["yahooSurvey", "ripHistorical"],
 });
 
-export const dynamic = "force-dynamic";
+// Public fundamentals — safe to cache across users for a few minutes.
+export const revalidate = 300;
 
 // yahoo-finance2 ships strict module-shaped types; some fields we read have
 // platform-specific quirks (exchangeName is on `price` but lives in different
@@ -57,38 +58,49 @@ export async function GET(
     const strongSell = numOrNull(rt.strongSell) ?? 0;
     const total = strongBuy + buy + hold + sell + strongSell;
 
-    return NextResponse.json({
-      name:
-        strOrNull(pr.shortName) ?? strOrNull(pr.longName) ?? ticker,
-      sector: strOrNull(ap.sector),
-      exchange:
-        strOrNull(pr.exchangeName) ??
-        strOrNull(pr.exchange) ??
-        null,
-      currentPrice:
-        numOrNull(pr.regularMarketPrice) ?? numOrNull(fd.currentPrice),
-      marketCap: numOrNull(sd.marketCap),
-      peRatio: numOrNull(sd.trailingPE),
-      eps: numOrNull(ks.trailingEps),
-      revenue: numOrNull(fd.totalRevenue),
-      fiftyTwoWeekHigh: numOrNull(sd.fiftyTwoWeekHigh),
-      fiftyTwoWeekLow: numOrNull(sd.fiftyTwoWeekLow),
-      avgVolume: numOrNull(sd.averageVolume),
-      beta: numOrNull(sd.beta),
-      dividendYield: numOrNull(sd.dividendYield), // fraction (0–1) — client multiplies
-      floatShares: numOrNull(ks.floatShares),
-      analystRatings: {
-        buy: total > 0 ? (strongBuy + buy) / total : 0,
-        hold: total > 0 ? hold / total : 0,
-        sell: total > 0 ? (sell + strongSell) / total : 0,
-        totalAnalysts: total,
+    return NextResponse.json(
+      {
+        name:
+          strOrNull(pr.shortName) ?? strOrNull(pr.longName) ?? ticker,
+        sector: strOrNull(ap.sector),
+        exchange:
+          strOrNull(pr.exchangeName) ??
+          strOrNull(pr.exchange) ??
+          null,
+        currentPrice:
+          numOrNull(pr.regularMarketPrice) ?? numOrNull(fd.currentPrice),
+        marketCap: numOrNull(sd.marketCap),
+        peRatio: numOrNull(sd.trailingPE),
+        eps: numOrNull(ks.trailingEps),
+        revenue: numOrNull(fd.totalRevenue),
+        fiftyTwoWeekHigh: numOrNull(sd.fiftyTwoWeekHigh),
+        fiftyTwoWeekLow: numOrNull(sd.fiftyTwoWeekLow),
+        avgVolume: numOrNull(sd.averageVolume),
+        beta: numOrNull(sd.beta),
+        dividendYield: numOrNull(sd.dividendYield), // fraction (0–1) — client multiplies
+        floatShares: numOrNull(ks.floatShares),
+        analystRatings: {
+          buy: total > 0 ? (strongBuy + buy) / total : 0,
+          hold: total > 0 ? hold / total : 0,
+          sell: total > 0 ? (sell + strongSell) / total : 0,
+          totalAnalysts: total,
+        },
       },
-    });
+      {
+        headers: {
+          "Cache-Control":
+            "public, s-maxage=300, stale-while-revalidate=900",
+        },
+      },
+    );
   } catch (err) {
     console.warn(
       `Stats fetch failed for ${ticker}:`,
       err instanceof Error ? err.message : err,
     );
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed" },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
   }
 }

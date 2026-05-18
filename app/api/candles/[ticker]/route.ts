@@ -5,6 +5,9 @@ import {
   isYahooTimeframe,
 } from "@/lib/yahooFinance";
 
+// Public candle data — CDN-cacheable per (ticker, timeframe).
+export const revalidate = 60;
+
 function fallbackCandles(): YahooCandle[] {
   const start = new Date("2024-01-01T00:00:00Z");
   const closes = [180, 181.5, 180.8, 182.3, 181.7, 183.4, 184.1, 183.6, 185.2, 186.0];
@@ -30,7 +33,9 @@ export async function GET(
     const data = await fetchYahooCandles(ticker, timeframe);
     const body = data && data.length > 0 ? data : fallbackCandles();
     return NextResponse.json(body, {
-      headers: { "Cache-Control": "max-age=3600" },
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+      },
     });
   } catch (err) {
     console.error("GET /api/candles error:", err);
