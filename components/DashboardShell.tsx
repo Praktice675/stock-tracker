@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import Card from "@/components/ui/Card";
 import DetailPanel from "@/components/DetailPanel";
 // PortfolioTracker is staying imported for Phase 2 (dashboard/portfolio page).
 // Intentionally unused here — the dashboard/portfolio route owns it next phase.
@@ -246,13 +247,24 @@ export default function DashboardShell() {
   );
 
   return (
-    <div className="flex w-full flex-1 overflow-hidden">
+    <div
+      className="flex w-full flex-1 overflow-hidden"
+      style={{ padding: "16px", gap: "16px" }}
+    >
       <aside
-        className="flex h-full w-[260px] shrink-0 flex-col bg-bg-surface"
-        style={{ borderRight: "1px solid var(--border)" }}
+        className="flex h-full w-[260px] shrink-0 flex-col"
         aria-label="Watchlist"
       >
-        <div className="flex min-h-0 flex-1 flex-col">
+        <Card
+          padding="0"
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+            overflow: "hidden",
+          }}
+        >
           <Watchlist
             selectedTicker={selectedTicker}
             onSelect={setSelectedTicker}
@@ -260,22 +272,30 @@ export default function DashboardShell() {
             onAddToWatchlist={handleAddToWatchlist}
             onRemoveFromWatchlist={handleRemoveFromWatchlist}
           />
-        </div>
+        </Card>
       </aside>
 
       <main
-        className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-bg-primary"
+        className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden"
         style={{ height: "100%" }}
       >
-        <StockChart selectedTicker={selectedTicker} />
+        <Card
+          padding="0"
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+            overflow: "hidden",
+          }}
+        >
+          <StockChart selectedTicker={selectedTicker} />
+        </Card>
       </main>
 
       <aside
-        className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto bg-bg-surface [&::-webkit-scrollbar]:hidden"
-        style={{
-          borderLeft: "1px solid var(--border)",
-          scrollbarWidth: "none",
-        }}
+        className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: "none" }}
         aria-label="Detail panel"
       >
         <DetailPanel selectedTicker={selectedTicker} />

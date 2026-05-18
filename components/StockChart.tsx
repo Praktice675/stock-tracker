@@ -108,6 +108,15 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
   const [activeTf, setActiveTf] = useState<Timeframe>("1M");
   const [data, setData] = useState<Candle[]>(() => generateForTicker(selectedTicker));
   const [loading, setLoading] = useState(false);
+  // Header price + day-change come from /api/quote, NOT from the candles
+  // array. The candles array's last two entries shift shape with the
+  // selected range (1D = minute bars, 1M/1Y = daily bars), which would
+  // make the "current price" and "% change" drift when the user only
+  // switches chart ranges. The quote is range-independent — always the
+  // latest price + today-vs-yesterday change.
+  const [quote, setQuote] = useState<{ price: number; changePercent: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     // Show mock immediately so the chart isn't blank during fetch
@@ -146,9 +155,69 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
     };
   }, [selectedTicker, activeTf]);
 
+  // Independent of activeTf — only refetches when the selected ticker
+  // changes (then polls every 30s). Clears the prior ticker's quote first
+  // so we don't briefly render AAPL's price under MSFT's header. Setting
+  // setQuote here does NOT cause the chart series to re-render — the chart
+  // useEffect depends on `data`, not `quote`.
+  useEffect(() => {
+    setQuote(null);
+    let cancelled = false;
+
+    const fetchQuote = async () => {
+      try {
+        const res = await fetch(`/api/quote/${selectedTicker}`, {
+          cache: "no-store",
+        });
+        if (cancelled || !res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        if (
+          typeof json?.price === "number" &&
+          typeof json?.changePercent === "number"
+        ) {
+          setQuote({ price: json.price, changePercent: json.changePercent });
+        }
+      } catch (err) {
+        console.warn(
+          `Quote fetch for ${selectedTicker} failed:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    };
+
+    const tick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void fetchQuote();
+    };
+
+    tick();
+    let id = setInterval(tick, 30_000);
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearInterval(id);
+      } else {
+        tick();
+        id = setInterval(tick, 30_000);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [selectedTicker]);
+
+  // Fall back to candle-derived values only while the quote is loading
+  // for the first time — keeps the header from showing "---" on first paint.
   const last = data[data.length - 1];
   const prev = data[data.length - 2] ?? last;
-  const changePct = ((last.close - prev.close) / prev.close) * 100;
+  const fallbackChangePct = ((last.close - prev.close) / prev.close) * 100;
+  const price = quote?.price ?? last.close;
+  const changePct = quote?.changePercent ?? fallbackChangePct;
   const isPositive = changePct >= 0;
 
   useEffect(() => {
@@ -234,7 +303,7 @@ export default function StockChart({ selectedTicker = "AAPL" }: Props) {
     <div className="flex h-full w-full flex-col">
       <Toolbar
         ticker={selectedTicker}
-        price={last.close}
+        price={price}
         changePct={changePct}
         isPositive={isPositive}
         activeTf={activeTf}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Card from "@/components/ui/Card";
 
 type Stat = { label: string; value: string };
 type Rating = { label: string; pct: number; color: string };
@@ -199,7 +200,7 @@ export default function DetailPanel({ selectedTicker }: Props) {
         : loadingNews();
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col" style={{ gap: "16px" }}>
       <Header
         name={displayName}
         sector={displaySector}
@@ -226,9 +227,7 @@ function Header({
   ticker: string;
 }) {
   return (
-    <section
-      style={{ padding: "16px", borderBottom: "1px solid var(--border)" }}
-    >
+    <Card padding="16px">
       <div className="flex items-center gap-2">
         <span
           className="text-text-primary font-bold"
@@ -255,15 +254,13 @@ function Header({
       >
         {exchange}: {ticker}
       </div>
-    </section>
+    </Card>
   );
 }
 
 function StatsGrid({ stats }: { stats: Stat[] }) {
   return (
-    <section
-      style={{ padding: "16px", borderBottom: "1px solid var(--border)" }}
-    >
+    <Card padding="16px">
       <div className="grid grid-cols-2 gap-x-4">
         {stats.map((stat) => (
           <div key={stat.label} style={{ paddingBottom: "16px" }}>
@@ -286,7 +283,7 @@ function StatsGrid({ stats }: { stats: Stat[] }) {
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -307,9 +304,7 @@ function PerformanceRange({
   }
 
   return (
-    <section
-      style={{ padding: "16px", borderBottom: "1px solid var(--border)" }}
-    >
+    <Card padding="16px">
       <div
         className="text-text-muted uppercase"
         style={{ fontSize: "9px", letterSpacing: "0.18em" }}
@@ -371,7 +366,7 @@ function PerformanceRange({
           {range.high != null ? `$${range.high.toFixed(2)}` : PLACEHOLDER}
         </span>
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -383,9 +378,7 @@ function AnalystRatings({
   loading: boolean;
 }) {
   return (
-    <section
-      style={{ padding: "16px", borderBottom: "1px solid var(--border)" }}
-    >
+    <Card padding="16px">
       <div
         className="text-text-muted uppercase"
         style={{
@@ -445,13 +438,13 @@ function AnalystRatings({
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }
 
 function LatestNews({ news }: { news: NewsItem[] }) {
   return (
-    <section style={{ padding: "16px" }}>
+    <Card padding="16px">
       <div
         className="text-text-muted uppercase"
         style={{
@@ -500,6 +493,6 @@ function LatestNews({ news }: { news: NewsItem[] }) {
           </article>
         ))}
       </div>
-    </section>
+    </Card>
   );
 }

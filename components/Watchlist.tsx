@@ -8,7 +8,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { Line, LineChart, ResponsiveContainer } from "recharts";
+import CompanyLogo from "@/components/markets/CompanyLogo";
+import Sparkline from "@/components/markets/Sparkline";
 
 type WatchlistEntry = { ticker: string; name: string };
 
@@ -22,11 +23,6 @@ type SearchResult = { ticker: string; name: string };
 
 const POSITIVE = "#00FF94";
 const NEGATIVE = "#FF3B5C";
-
-// Used for every card's mini sparkline. The strict prop type from page.tsx
-// is just { ticker, name }, so there's no per-ticker series available at
-// render time — a synthetic flat series keeps the visual element intact.
-const DEFAULT_SPARK = [100, 100.4, 100.2, 100.7, 100.5, 100.9, 100.8];
 
 type WatchlistProps = {
   selectedTicker: string;
@@ -46,6 +42,9 @@ export default function Watchlist({
   onRemoveFromWatchlist,
 }: WatchlistProps) {
   const [quotes, setQuotes] = useState<Record<string, LiveQuote>>({});
+  // Per-ticker close-price series for the inline sparkline. Populated once
+  // per ticker via /api/candles?timeframe=1M; we don't poll for updates.
+  const [sparks, setSparks] = useState<Record<string, number[]>>({});
   const [flashStates, setFlashStates] = useState<
     Record<string, FlashDirection | null>
   >({});
@@ -53,6 +52,7 @@ export default function Watchlist({
   const flashTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>(
     {},
   );
+  const sparkFetchedRef = useRef<Set<string>>(new Set());
 
   // Search state
   const [query, setQuery] = useState("");
@@ -79,7 +79,11 @@ export default function Watchlist({
     }, 700);
   };
 
-  // ---- Live-quote polling (staggered, 30s, reads watchlist via ref) ----
+  // ---- Live-quote polling: every 30s, Promise.all across visible tickers.
+  // Now that /api/quote has a 30s module-level cache, all clients hammering
+  // the same ticker collapse to one Yahoo call per 30s, so parallel is safe.
+  // Pauses while the tab is hidden (no point burning quote calls for a
+  // tab the user isn't looking at).
   const fetchOneQuote = async (ticker: string) => {
     try {
       const res = await fetch(`/api/quote/${ticker}`, { cache: "no-store" });
@@ -122,21 +126,31 @@ export default function Watchlist({
   useEffect(() => {
     cancelledRef.current = false;
 
-    const dispatchStaggered = () => {
+    const pollAll = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       const list = watchlistRef.current;
-      list.forEach((stock, i) => {
-        setTimeout(() => {
-          if (cancelledRef.current) return;
-          fetchOneQuote(stock.ticker);
-        }, i * 400);
-      });
+      void Promise.all(list.map((stock) => fetchOneQuote(stock.ticker)));
     };
 
-    dispatchStaggered();
-    const id = setInterval(dispatchStaggered, 30_000);
+    pollAll();
+    let id = setInterval(pollAll, 30_000);
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearInterval(id);
+      } else {
+        // Tab regained focus — fetch immediately so the user sees fresh
+        // numbers instead of waiting up to 30s, then resume the interval.
+        pollAll();
+        id = setInterval(pollAll, 30_000);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       cancelledRef.current = true;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -152,6 +166,44 @@ export default function Watchlist({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchlist]);
+
+  // Fetch a ~1-month close series for each visible ticker once per session.
+  // 1M from /api/candles returns ~22 daily candles — enough for a clean
+  // sparkline. NO `cancelled` flag: this effect re-runs whenever `watchlist`
+  // changes (the DB-load flow in DashboardShell updates the list shortly
+  // after first render), and a cancellation closure would gate the in-flight
+  // fetches from the first run, while the dedupe ref would block them from
+  // re-firing — leaving the originally-visible tickers permanently empty.
+  // setSparks after unmount is a no-op in React 18, so unconditional setState
+  // is safe.
+  useEffect(() => {
+    async function fetchOneSparkline(ticker: string) {
+      try {
+        const res = await fetch(`/api/candles/${ticker}?timeframe=1M`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data)) return;
+        const closes: number[] = [];
+        for (const c of data) {
+          if (typeof c?.close === "number" && Number.isFinite(c.close)) {
+            closes.push(c.close);
+          }
+        }
+        if (closes.length > 0) {
+          setSparks((prev) => ({ ...prev, [ticker]: closes }));
+        }
+      } catch (err) {
+        console.warn(`Sparkline fetch for ${ticker} failed:`, err);
+      }
+    }
+
+    for (const s of watchlist) {
+      if (!sparkFetchedRef.current.has(s.ticker)) {
+        sparkFetchedRef.current.add(s.ticker);
+        void fetchOneSparkline(s.ticker);
+      }
+    }
   }, [watchlist]);
 
   // ---- Debounced search ----
@@ -360,6 +412,7 @@ export default function Watchlist({
             key={stock.ticker}
             stock={stock}
             quote={quotes[stock.ticker]}
+            sparkData={sparks[stock.ticker]}
             selected={stock.ticker === selectedTicker}
             canRemove={canRemove}
             flashDirection={flashStates[stock.ticker] ?? null}
@@ -567,6 +620,7 @@ function PillButton({
 function StockCard({
   stock,
   quote,
+  sparkData,
   selected,
   canRemove,
   flashDirection,
@@ -575,6 +629,7 @@ function StockCard({
 }: {
   stock: WatchlistEntry;
   quote: LiveQuote | undefined;
+  sparkData: number[] | undefined;
   selected: boolean;
   canRemove: boolean;
   flashDirection: FlashDirection | null;
@@ -588,7 +643,6 @@ function StockCard({
   const isPositive = changePercent >= 0;
   const color = isPositive ? POSITIVE : NEGATIVE;
   const sign = isPositive ? "+" : "";
-  const data = DEFAULT_SPARK.map((value, i) => ({ i, value }));
 
   return (
     <div
@@ -606,7 +660,11 @@ function StockCard({
       }`}
       style={{
         padding: "12px",
-        borderBottom: "1px solid var(--border)",
+        // 2px colored gain/loss accent at the bottom (neutral when quote
+        // hasn't loaded yet so first paint isn't misleadingly green).
+        borderBottom: showPlaceholder
+          ? "2px solid var(--border)"
+          : `2px solid ${color}`,
         borderLeft: selected
           ? "2px solid rgb(var(--color-orange))"
           : "2px solid transparent",
@@ -645,8 +703,13 @@ function StockCard({
         </button>
       )}
 
-      <div className="flex items-start justify-between">
-        <div className="flex flex-col">
+      <div className="flex items-center" style={{ gap: "8px" }}>
+        <CompanyLogo ticker={stock.ticker} size={24} />
+
+        <div
+          className="flex flex-col"
+          style={{ flex: 1, minWidth: 0, gap: "2px" }}
+        >
           <span
             className="font-mono font-bold uppercase text-text-primary"
             style={{ fontSize: "13px", letterSpacing: "-0.015em" }}
@@ -655,13 +718,39 @@ function StockCard({
           </span>
           <span
             className="text-text-muted"
-            style={{ fontSize: "10px", letterSpacing: "-0.015em" }}
+            style={{
+              fontSize: "10px",
+              letterSpacing: "-0.015em",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
           >
             {stock.name}
           </span>
         </div>
 
-        <div className="flex flex-col items-end gap-1">
+        {/* Fixed-width slot so the row doesn't reflow when the sparkline loads */}
+        <div
+          style={{
+            width: 64,
+            height: 24,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          <Sparkline
+            data={sparkData ?? []}
+            positive={isPositive}
+            width={64}
+          />
+        </div>
+
+        <div
+          className="flex flex-col items-end"
+          style={{ gap: "2px", flexShrink: 0 }}
+        >
           <span
             className={`font-mono text-text-primary ${
               flashDirection === "green"
@@ -697,21 +786,6 @@ function StockCard({
             {showPlaceholder ? "---" : `${sign}${changePercent.toFixed(2)}%`}
           </span>
         </div>
-      </div>
-
-      <div style={{ height: "28px", margin: 0 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke={color}
-              strokeWidth={1.5}
-              dot={false}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
       </div>
     </div>
   );

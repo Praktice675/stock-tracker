@@ -1,13 +1,8 @@
 "use client";
 
-// components/portfolio/BrokerageHoldings.tsx
-//
-// Displays synced positions from brokerage_positions. On mount, triggers
-// a background sync (subject to the 15-min freshness gate in the backend).
-// A REFRESH button forces an immediate re-sync.
-
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Card from "@/components/ui/Card";
 import type { BrokeragePosition } from "@/lib/portfolio/brokerage";
 
 type Props = {
@@ -20,6 +15,70 @@ export default function BrokerageHoldings({ positions, hasConnections }: Props) 
   const [syncing, setSyncing] = useState(false);
   const [, startTransition] = useTransition();
   const autoSyncedRef = useRef(false);
+
+  // Live price overlay. DB columns (current_price, market_value) are the
+  // baseline snapshot from the last brokerage sync; this map overrides
+  // them as fresh quotes arrive without mutating the prop.
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+
+  const uniqueSymbols = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of positions) {
+      if (p.symbol) set.add(p.symbol);
+    }
+    return Array.from(set);
+  }, [positions]);
+
+  // Stash the latest unique-symbols list in a ref so the polling effect
+  // (which runs only on mount) always reads the current set without
+  // re-installing intervals when positions reorder.
+  const symbolsRef = useRef<string[]>(uniqueSymbols);
+  symbolsRef.current = uniqueSymbols;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchOne = async (symbol: string) => {
+      try {
+        const res = await fetch(`/api/quote/${symbol}`, { cache: "no-store" });
+        if (cancelled || !res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        if (typeof json?.price !== "number") return;
+        setLivePrices((prev) =>
+          prev[symbol] === json.price ? prev : { ...prev, [symbol]: json.price },
+        );
+      } catch (err) {
+        console.warn(`Brokerage quote ${symbol} failed:`, err);
+      }
+    };
+
+    const pollAll = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      const list = symbolsRef.current;
+      if (list.length === 0) return;
+      void Promise.all(list.map(fetchOne));
+    };
+
+    pollAll();
+    let id = setInterval(pollAll, 30_000);
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        clearInterval(id);
+      } else {
+        pollAll();
+        id = setInterval(pollAll, 30_000);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   async function runSync(force: boolean) {
     if (syncing) return;
@@ -54,10 +113,10 @@ export default function BrokerageHoldings({ positions, hasConnections }: Props) 
   if (!hasConnections) return null;
 
   return (
-    <div style={{ marginTop: "24px", marginBottom: "24px" }}>
+    <Card style={{ marginTop: "24px", marginBottom: "24px" }}>
       <div
         className="flex items-center"
-        style={{ justifyContent: "space-between", marginBottom: "12px" }}
+        style={{ justifyContent: "space-between", marginBottom: "20px" }}
       >
         <h2
           className="font-mono uppercase"
@@ -83,6 +142,7 @@ export default function BrokerageHoldings({ positions, hasConnections }: Props) 
             color: "var(--text-muted)",
             background: "transparent",
             border: "1px solid var(--border)",
+            borderRadius: "8px",
             padding: "6px 12px",
             cursor: syncing ? "wait" : "pointer",
             transition: "color 150ms, border-color 150ms",
@@ -95,11 +155,9 @@ export default function BrokerageHoldings({ positions, hasConnections }: Props) 
       {positions.length === 0 ? (
         <div
           style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-            padding: "20px",
             color: "var(--text-muted)",
             fontSize: "13px",
+            padding: "8px 0",
           }}
         >
           {syncing
@@ -107,18 +165,13 @@ export default function BrokerageHoldings({ positions, hasConnections }: Props) 
             : "No positions yet. Make a trade in your brokerage to see it here."}
         </div>
       ) : (
-        <div
-          style={{
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-          }}
-        >
+        <div>
           <div
             className="grid font-mono uppercase"
             style={{
               gridTemplateColumns: "1fr 2fr 1fr 1fr 1fr 1.2fr",
               gap: "12px",
-              padding: "12px 16px",
+              padding: "12px 0",
               borderBottom: "1px solid var(--border)",
               fontSize: "10px",
               fontWeight: 700,
@@ -134,59 +187,68 @@ export default function BrokerageHoldings({ positions, hasConnections }: Props) 
             <div style={{ textAlign: "right" }}>Value</div>
           </div>
 
-          {positions.map((p, i) => (
-            <div
-              key={p.id}
-              className="grid"
-              style={{
-                gridTemplateColumns: "1fr 2fr 1fr 1fr 1fr 1.2fr",
-                gap: "12px",
-                padding: "14px 16px",
-                borderBottom:
-                  i === positions.length - 1
-                    ? "none"
-                    : "1px solid var(--border)",
-                fontSize: "13px",
-                color: "var(--text-primary)",
-                alignItems: "center",
-              }}
-            >
-              <div className="font-mono" style={{ fontWeight: 700 }}>
-                {p.symbol}
-              </div>
+          {positions.map((p, i) => {
+            const livePrice = livePrices[p.symbol];
+            const displayPrice =
+              typeof livePrice === "number" ? livePrice : p.current_price;
+            const displayValue =
+              typeof livePrice === "number"
+                ? livePrice * p.quantity
+                : p.market_value;
+            return (
               <div
+                key={p.id}
+                className="grid"
                 style={{
-                  color: "var(--text-muted)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  gridTemplateColumns: "1fr 2fr 1fr 1fr 1fr 1.2fr",
+                  gap: "12px",
+                  padding: "14px 0",
+                  borderBottom:
+                    i === positions.length - 1
+                      ? "none"
+                      : "1px solid var(--border)",
+                  fontSize: "13px",
+                  color: "var(--text-primary)",
+                  alignItems: "center",
                 }}
               >
-                {p.description ?? "—"}
+                <div className="font-mono" style={{ fontWeight: 700 }}>
+                  {p.symbol}
+                </div>
+                <div
+                  style={{
+                    color: "var(--text-muted)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {p.description ?? "—"}
+                </div>
+                <div className="font-mono" style={{ textAlign: "right" }}>
+                  {fmtQty(p.quantity)}
+                </div>
+                <div
+                  className="font-mono"
+                  style={{ textAlign: "right", color: "var(--text-muted)" }}
+                >
+                  {fmtMoney(p.avg_cost)}
+                </div>
+                <div className="font-mono" style={{ textAlign: "right" }}>
+                  {fmtMoney(displayPrice)}
+                </div>
+                <div
+                  className="font-mono"
+                  style={{ textAlign: "right", fontWeight: 700 }}
+                >
+                  {fmtMoney(displayValue)}
+                </div>
               </div>
-              <div className="font-mono" style={{ textAlign: "right" }}>
-                {fmtQty(p.quantity)}
-              </div>
-              <div
-                className="font-mono"
-                style={{ textAlign: "right", color: "var(--text-muted)" }}
-              >
-                {fmtMoney(p.avg_cost)}
-              </div>
-              <div className="font-mono" style={{ textAlign: "right" }}>
-                {fmtMoney(p.current_price)}
-              </div>
-              <div
-                className="font-mono"
-                style={{ textAlign: "right", fontWeight: 700 }}
-              >
-                {fmtMoney(p.market_value)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 

@@ -108,10 +108,17 @@ type ChartConfig = {
 
 function chartConfig(tf: YahooTimeframe): ChartConfig {
   switch (tf) {
+    // Intraday ranges need extra period1 cushion: Yahoo's chart endpoint
+    // returns only bars *after* period1 — it does not look backward for
+    // the last trading day. If period1 lands in a weekend/holiday gap with
+    // no later bars yet (e.g. Sunday, or Monday before market open), the
+    // response is `{quotes: []}`, the route falls back to its hardcoded
+    // 2024 fixture, and the chart shows stale dates. The .slice(-limit)
+    // below trims back to a single session worth of bars.
     case "1D":
-      return { period1: daysAgo(2), interval: "5m", intraday: true, limit: 78 };
+      return { period1: daysAgo(7), interval: "5m", intraday: true, limit: 78 };
     case "1W":
-      return { period1: daysAgo(7), interval: "60m", intraday: true, limit: 120 };
+      return { period1: daysAgo(14), interval: "60m", intraday: true, limit: 120 };
     case "1M":
       return { period1: daysAgo(35), interval: "1d", intraday: false, limit: 30 };
     case "3M":

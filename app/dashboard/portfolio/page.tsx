@@ -5,6 +5,7 @@ import AllocationChart from "@/components/portfolio/AllocationChart";
 import BrokerageConnections from "@/components/portfolio/BrokerageConnections";
 import BrokerageHoldings from "@/components/portfolio/BrokerageHoldings";
 import HoldingsTable from "@/components/portfolio/HoldingsTable";
+import IntradayPortfolioChart from "@/components/portfolio/IntradayPortfolioChart";
 import MetricsStrip from "@/components/portfolio/MetricsStrip";
 import PortfolioChart from "@/components/portfolio/PortfolioChart";
 import PortfolioEmpty from "@/components/portfolio/PortfolioEmpty";
@@ -42,6 +43,8 @@ export default async function PortfolioPage() {
           positions={brokerage.positions}
           hasConnections={brokerage.hasActiveConnections}
         />
+
+        {brokerage.hasActiveConnections && <IntradayPortfolioChart />}
 
         {data.hasAnyTransaction ? (
           <>
