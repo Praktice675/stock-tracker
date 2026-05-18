@@ -3,11 +3,13 @@ import DashboardChrome from "@/components/DashboardChrome";
 import AddTransactionDialog from "@/components/portfolio/AddTransactionDialog";
 import AllocationChart from "@/components/portfolio/AllocationChart";
 import BrokerageConnections from "@/components/portfolio/BrokerageConnections";
+import BrokerageHoldings from "@/components/portfolio/BrokerageHoldings";
 import HoldingsTable from "@/components/portfolio/HoldingsTable";
 import MetricsStrip from "@/components/portfolio/MetricsStrip";
 import PortfolioChart from "@/components/portfolio/PortfolioChart";
 import PortfolioEmpty from "@/components/portfolio/PortfolioEmpty";
 import TransactionsList from "@/components/portfolio/TransactionsList";
+import { getBrokerageData } from "@/lib/portfolio/brokerage";
 import { getPortfolioData } from "@/lib/portfolio/compute";
 import { createClient } from "@/lib/supabase/server";
 
@@ -23,7 +25,10 @@ export default async function PortfolioPage() {
     redirect("/auth/login");
   }
 
-  const data = await getPortfolioData();
+  const [data, brokerage] = await Promise.all([
+    getPortfolioData(),
+    getBrokerageData(),
+  ]);
 
   return (
     <DashboardChrome user={user}>
@@ -32,6 +37,11 @@ export default async function PortfolioPage() {
         style={{ padding: "24px 24px 48px" }}
       >
         <BrokerageConnections />
+
+        <BrokerageHoldings
+          positions={brokerage.positions}
+          hasConnections={brokerage.hasActiveConnections}
+        />
 
         {data.hasAnyTransaction ? (
           <>
@@ -96,9 +106,9 @@ export default async function PortfolioPage() {
               <TransactionsList transactions={data.recentTransactions} />
             </div>
           </>
-        ) : (
+        ) : !brokerage.hasActiveConnections ? (
           <PortfolioEmpty />
-        )}
+        ) : null}
       </div>
     </DashboardChrome>
   );
