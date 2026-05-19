@@ -1,12 +1,17 @@
 import { redirect } from "next/navigation";
 import DashboardChrome from "@/components/DashboardChrome";
 import AccountSettingsForm from "@/components/settings/AccountSettingsForm";
+import SubscriptionCard from "@/components/settings/SubscriptionCard";
+import { getUserPlan } from "@/lib/subscription";
 import { getUserProfile } from "@/lib/user-profile";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const SECTIONS = [{ key: "account", label: "Account" }] as const;
+const SECTIONS = [
+  { key: "account", label: "Account" },
+  { key: "subscription", label: "Subscription" },
+] as const;
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -17,7 +22,10 @@ export default async function SettingsPage() {
     redirect("/auth/login");
   }
 
-  const profile = await getUserProfile();
+  const [profile, plan] = await Promise.all([
+    getUserProfile(),
+    getUserPlan(),
+  ]);
   if (!profile) {
     redirect("/auth/login");
   }
@@ -96,11 +104,54 @@ export default async function SettingsPage() {
             })}
           </nav>
 
-          <AccountSettingsForm
-            initialName={profile.displayName}
-            initialAvatarUrl={profile.avatarUrl}
-            email={profile.email ?? ""}
-          />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "28px",
+              minWidth: 0,
+            }}
+          >
+            <section id="account">
+              <h2
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  letterSpacing: "0.25em",
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  margin: 0,
+                  marginBottom: "12px",
+                  fontFamily: "var(--font-mono), monospace",
+                }}
+              >
+                Account
+              </h2>
+              <AccountSettingsForm
+                initialName={profile.displayName}
+                initialAvatarUrl={profile.avatarUrl}
+                email={profile.email ?? ""}
+              />
+            </section>
+
+            <section id="subscription">
+              <h2
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  letterSpacing: "0.25em",
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  margin: 0,
+                  marginBottom: "12px",
+                  fontFamily: "var(--font-mono), monospace",
+                }}
+              >
+                Subscription
+              </h2>
+              <SubscriptionCard plan={plan} />
+            </section>
+          </div>
         </div>
       </div>
     </DashboardChrome>

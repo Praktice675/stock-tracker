@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import { redirect } from "next/navigation";
+import CheckoutSuccessToast from "@/components/CheckoutSuccessToast";
 import DashboardChrome from "@/components/DashboardChrome";
 import AddTransactionDialog from "@/components/portfolio/AddTransactionDialog";
 import AllocationChart from "@/components/portfolio/AllocationChart";
@@ -13,12 +14,12 @@ import PortfolioHeroCards, {
   type HeroData,
   type HeroDistributionSegment,
   type HeroSnapshot,
+  type UnrealizedPosition,
 } from "@/components/portfolio/PortfolioHeroCards";
 import TransactionsList from "@/components/portfolio/TransactionsList";
 import { StaggerContainer, StaggerItem } from "@/components/ui/Stagger";
 import { getBrokerageData } from "@/lib/portfolio/brokerage";
 import { getPortfolioData } from "@/lib/portfolio/compute";
-import { getRealizedPnlYtd } from "@/lib/portfolio/realized-pnl";
 import { createClient } from "@/lib/supabase/server";
 import { getUserProfile } from "@/lib/user-profile";
 
@@ -34,10 +35,9 @@ export default async function PortfolioPage() {
     redirect("/auth/login");
   }
 
-  const [data, brokerage, realized, profile] = await Promise.all([
+  const [data, brokerage, profile] = await Promise.all([
     getPortfolioData(),
     getBrokerageData(),
-    getRealizedPnlYtd(),
     getUserProfile(),
   ]);
 
@@ -98,13 +98,40 @@ export default async function PortfolioPage() {
     .eq("user_id", user.id)
     .order("taken_at", { ascending: true });
 
-  const allSnapshots: HeroSnapshot[] = ((snapshotsRes.data ?? []) as Array<{
+  const existingSnapshots: HeroSnapshot[] = ((snapshotsRes.data ?? []) as Array<{
     total_value: number | string;
     taken_at: string;
   }>).map((s) => ({
     totalValue: Number(s.total_value),
     takenAt: s.taken_at,
   }));
+
+  // If the latest snapshot is missing / older than 5 minutes / disagrees with
+  // the live computed total by more than $1, write a fresh point inline so
+  // the chart's right edge tracks the actual current portfolio value
+  // instead of an outdated snapshot from before the user added holdings.
+  const allSnapshots: HeroSnapshot[] = [...existingSnapshots];
+  const latestExisting = existingSnapshots[existingSnapshots.length - 1];
+  const FIVE_MIN_MS = 5 * 60 * 1000;
+  const isStale =
+    !latestExisting ||
+    Date.now() - new Date(latestExisting.takenAt).getTime() > FIVE_MIN_MS ||
+    Math.abs(latestExisting.totalValue - totalValue) > 1;
+  if (isStale && totalValue > 0) {
+    const nowIso = new Date().toISOString();
+    const { error: snapErr } = await supabase
+      .from("portfolio_snapshots")
+      .insert({
+        user_id: user.id,
+        total_value: totalValue,
+        taken_at: nowIso,
+      });
+    if (snapErr) {
+      console.warn("portfolio snapshot insert on load failed:", snapErr.message);
+    } else {
+      allSnapshots.push({ totalValue, takenAt: nowIso });
+    }
+  }
 
   // Today's change (snapshots within the trailing 24h window).
   const cutoffMs = Date.now() - 24 * 60 * 60 * 1000;
@@ -122,34 +149,85 @@ export default async function PortfolioPage() {
     hasTodayChange = true;
   }
 
-  // YTD change (first snapshot of current year vs latest). Falls back to
-  // all-time if we don't have a snapshot in the current year yet.
+  // YTD change: compare liveTotal to the earliest pre-existing snapshot in
+  // the current year (or earliest pre-existing overall if there's none yet
+  // this year). We deliberately ignore the row we may have just inserted —
+  // otherwise the baseline === the live total and YTD always reads 0%.
+  //
+  // "Building history" guard: if there are < 2 pre-existing snapshots, OR
+  // they're all within $1 of each other (i.e. stuck/stale series), the YTD
+  // baseline isn't meaningful, so suppress the number.
   const yearStartMs = new Date(new Date().getFullYear(), 0, 1).getTime();
-  const ytdPoints = allSnapshots.filter(
-    (s) => new Date(s.takenAt).getTime() >= yearStartMs,
-  );
+  const ytdBaseline =
+    existingSnapshots.find(
+      (s) => new Date(s.takenAt).getTime() >= yearStartMs,
+    ) ?? existingSnapshots[0];
+  const existingValues = existingSnapshots.map((s) => s.totalValue);
+  const existingSpread =
+    existingValues.length === 0
+      ? 0
+      : Math.max(...existingValues) - Math.min(...existingValues);
+  const hasMeaningfulHistory =
+    existingSnapshots.length >= 2 && existingSpread > 1;
+
   let ytdChangeAbs = 0;
   let ytdChangePct = 0;
   let ytdLabel = "";
   let hasYtdChange = false;
-  if (ytdPoints.length >= 2) {
-    const first = ytdPoints[0].totalValue;
-    const latest = ytdPoints[ytdPoints.length - 1].totalValue;
-    ytdChangeAbs = latest - first;
-    ytdChangePct = first > 0 ? (ytdChangeAbs / first) * 100 : 0;
-    ytdLabel = "this year";
-    hasYtdChange = true;
-  } else if (allSnapshots.length >= 2) {
-    const first = allSnapshots[0].totalValue;
-    const latest = allSnapshots[allSnapshots.length - 1].totalValue;
-    ytdChangeAbs = latest - first;
-    ytdChangePct = first > 0 ? (ytdChangeAbs / first) * 100 : 0;
-    ytdLabel = "all time";
+  if (ytdBaseline && hasMeaningfulHistory) {
+    ytdChangeAbs = totalValue - ytdBaseline.totalValue;
+    ytdChangePct =
+      ytdBaseline.totalValue > 0
+        ? (ytdChangeAbs / ytdBaseline.totalValue) * 100
+        : 0;
+    const baseYear = new Date(ytdBaseline.takenAt).getFullYear();
+    ytdLabel =
+      baseYear === new Date().getFullYear() ? "this year" : "all time";
     hasYtdChange = true;
   }
 
   const hasAnyPosition =
     brokerage.positions.length > 0 || data.holdings.length > 0;
+
+  // Unrealized P&L per holding (brokerage positions only — manual holdings
+  // don't track avg_cost the same way). Filter out anything missing a price
+  // or avg_cost so we don't render bars off bad data.
+  const unrealizedPositions: UnrealizedPosition[] = brokerage.positions
+    .filter(
+      (p) =>
+        typeof p.current_price === "number" &&
+        typeof p.avg_cost === "number" &&
+        typeof p.quantity === "number" &&
+        p.quantity > 0,
+    )
+    .map((p) => {
+      const currentPrice = p.current_price as number;
+      const avgCost = p.avg_cost as number;
+      const pnl = (currentPrice - avgCost) * p.quantity;
+      const costBasis = avgCost * p.quantity;
+      const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : 0;
+      return {
+        symbol: p.symbol,
+        quantity: p.quantity,
+        currentPrice,
+        avgCost,
+        costBasis,
+        pnl,
+        pnlPct,
+      };
+    });
+  const unrealizedTotalPnl = unrealizedPositions.reduce(
+    (s, p) => s + p.pnl,
+    0,
+  );
+  const unrealizedCostBasis = unrealizedPositions.reduce(
+    (s, p) => s + p.costBasis,
+    0,
+  );
+  const unrealizedPct =
+    unrealizedCostBasis > 0
+      ? (unrealizedTotalPnl / unrealizedCostBasis) * 100
+      : 0;
 
   const heroData: HeroData = {
     hasAnyPosition,
@@ -163,11 +241,17 @@ export default async function PortfolioPage() {
     hasYtdChange,
     distribution,
     allSnapshots,
-    realized,
+    unrealized: {
+      positions: unrealizedPositions,
+      totalPnl: unrealizedTotalPnl,
+      costBasis: unrealizedCostBasis,
+      pct: unrealizedPct,
+    },
   };
 
   return (
     <DashboardChrome user={user}>
+      <CheckoutSuccessToast />
       <StaggerContainer
         className="flex w-full flex-col overflow-y-auto"
         style={{ padding: "24px 24px 48px" }}

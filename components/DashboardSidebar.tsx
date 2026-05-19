@@ -59,11 +59,13 @@ function getMarketStatus(now: Date): {
 type DashboardSidebarProps = {
   displayName?: string;
   avatarUrl?: string | null;
+  isPlus?: boolean;
 };
 
 export default function DashboardSidebar({
   displayName: displayNameProp,
   avatarUrl: avatarUrlProp,
+  isPlus = false,
 }: DashboardSidebarProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
@@ -101,6 +103,26 @@ export default function DashboardSidebar({
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.refresh();
+  }
+
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  async function startCheckout() {
+    if (checkoutLoading) return;
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", { method: "POST" });
+      const json = (await res.json()) as { url?: string; error?: string };
+      if (json.url) {
+        window.location.href = json.url;
+        return;
+      }
+      alert(json.error ?? "Checkout failed");
+    } catch (err) {
+      console.warn("Checkout request failed:", err);
+      alert("Network error — please try again.");
+    } finally {
+      setCheckoutLoading(false);
+    }
   }
 
   const email = user?.email ?? null;
@@ -232,8 +254,9 @@ export default function DashboardSidebar({
         </button>
       </nav>
 
-      {/* Upgrade card */}
-      {!collapsed && (
+      {/* Upgrade card — only shown to free users when the sidebar is expanded.
+          Plus subscribers don't need to see the upgrade prompt. */}
+      {!collapsed && !isPlus && (
         <div
           className="upgrade-card"
           style={{
@@ -272,11 +295,14 @@ export default function DashboardSidebar({
             >
               Unlock real-time data + unlimited AI chat
             </div>
-            <Link
-              href="/upgrade"
+            <button
+              type="button"
+              onClick={startCheckout}
+              disabled={checkoutLoading}
               className="font-mono uppercase"
               style={{
                 display: "block",
+                width: "100%",
                 textAlign: "center",
                 padding: "8px",
                 borderRadius: "8px",
@@ -286,17 +312,20 @@ export default function DashboardSidebar({
                 fontWeight: 700,
                 letterSpacing: "0.1em",
                 textDecoration: "none",
+                border: "none",
+                cursor: checkoutLoading ? "wait" : "pointer",
+                opacity: checkoutLoading ? 0.7 : 1,
                 transition: "opacity 150ms ease-out",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = "0.9";
+                if (!checkoutLoading) e.currentTarget.style.opacity = "0.9";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = "1";
+                if (!checkoutLoading) e.currentTarget.style.opacity = "1";
               }}
             >
-              Upgrade
-            </Link>
+              {checkoutLoading ? "Loading…" : "Upgrade"}
+            </button>
           </div>
         </div>
       )}
@@ -390,12 +419,33 @@ export default function DashboardSidebar({
               >
                 {displayName}
               </span>
-              <span
-                className="font-mono"
-                style={{ color: "var(--text-muted)", fontSize: 11 }}
-              >
-                Free plan
-              </span>
+              {isPlus ? (
+                <span
+                  className="font-mono uppercase"
+                  style={{
+                    alignSelf: "flex-start",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.12em",
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    background:
+                      "color-mix(in srgb, var(--accent) 20%, transparent)",
+                    color: "var(--accent)",
+                    border:
+                      "1px solid color-mix(in srgb, var(--accent) 40%, transparent)",
+                  }}
+                >
+                  Plus
+                </span>
+              ) : (
+                <span
+                  className="font-mono"
+                  style={{ color: "var(--text-muted)", fontSize: 11 }}
+                >
+                  Free plan
+                </span>
+              )}
             </div>
           )}
         </div>

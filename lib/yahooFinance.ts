@@ -206,6 +206,10 @@ export type YahooNewsItem = {
   providerPublishTime: number; // Unix seconds
   relatedTickers: string[];
   summary?: string;
+  // URL of the largest available thumbnail (or null if Yahoo didn't ship one).
+  // Yahoo returns a `thumbnail.resolutions[]` with multiple sizes; we pick the
+  // widest so the news hero card stays crisp at 2x density.
+  thumbnail?: string | null;
 };
 
 // Yahoo search() returns a `news` array per query. Map and clean for our
@@ -240,6 +244,31 @@ export async function fetchYahooNewsForTicker(
           )
         : [];
 
+      // Pluck the widest thumbnail resolution. Yahoo's payload looks like
+      // { thumbnail: { resolutions: [{ url, width, height, tag }] } }.
+      let thumbnail: string | null = null;
+      const tnode = n.thumbnail as unknown;
+      if (
+        tnode &&
+        typeof tnode === "object" &&
+        Array.isArray((tnode as { resolutions?: unknown }).resolutions)
+      ) {
+        const resolutions = (tnode as { resolutions: unknown[] }).resolutions;
+        let bestUrl: string | null = null;
+        let bestWidth = -1;
+        for (const r of resolutions) {
+          if (!r || typeof r !== "object") continue;
+          const obj = r as { url?: unknown; width?: unknown };
+          if (typeof obj.url !== "string" || obj.url.length === 0) continue;
+          const w = typeof obj.width === "number" ? obj.width : 0;
+          if (w > bestWidth) {
+            bestWidth = w;
+            bestUrl = obj.url;
+          }
+        }
+        thumbnail = bestUrl;
+      }
+
       items.push({
         uuid: typeof n.uuid === "string" && n.uuid.length > 0 ? n.uuid : link,
         title,
@@ -248,6 +277,7 @@ export async function fetchYahooNewsForTicker(
         providerPublishTime: time,
         relatedTickers,
         summary: typeof n.summary === "string" ? n.summary : undefined,
+        thumbnail,
       });
     }
     items.sort((a, b) => b.providerPublishTime - a.providerPublishTime);

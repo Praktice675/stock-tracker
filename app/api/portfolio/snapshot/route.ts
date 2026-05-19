@@ -123,6 +123,19 @@ export async function POST() {
   });
 }
 
+// Maps the ?range= query param to a trailing window in milliseconds. "all"
+// returns null (no filter). Unknown values default to 1d (preserves the
+// original behavior — IntradayPortfolioChart still relies on this when it
+// calls GET with no range).
+const RANGE_MS: Record<string, number | null> = {
+  "1d": 24 * 60 * 60 * 1000,
+  "1w": 7 * 24 * 60 * 60 * 1000,
+  "1m": 30 * 24 * 60 * 60 * 1000,
+  "3m": 90 * 24 * 60 * 60 * 1000,
+  "1y": 365 * 24 * 60 * 60 * 1000,
+  all: null,
+};
+
 export async function GET(req: Request) {
   const supabase = await createClient();
   const {
@@ -132,8 +145,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const range = new URL(req.url).searchParams.get("range");
-  const isAll = range === "all";
+  const range = (
+    new URL(req.url).searchParams.get("range") ?? "1d"
+  ).toLowerCase();
+  const windowMs =
+    range in RANGE_MS ? (RANGE_MS[range] as number | null) : 24 * 60 * 60 * 1000;
 
   let query = supabase
     .from("portfolio_snapshots")
@@ -141,8 +157,8 @@ export async function GET(req: Request) {
     .eq("user_id", user.id)
     .order("taken_at", { ascending: true });
 
-  if (!isAll) {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  if (windowMs !== null) {
+    const since = new Date(Date.now() - windowMs).toISOString();
     query = query.gte("taken_at", since);
   }
 

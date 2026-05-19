@@ -6,6 +6,7 @@ import DashboardSidebar from "@/components/DashboardSidebar";
 import DashboardTopBar from "@/components/DashboardTopBar";
 import EarningsStrip from "@/components/EarningsStrip";
 import { SidebarStateProvider } from "@/components/SidebarStateContext";
+import { getUserPlan } from "@/lib/subscription";
 import { getUserProfile } from "@/lib/user-profile";
 
 type Props = {
@@ -23,10 +24,14 @@ type Props = {
 // pill and sidebar profile widget so a single fetch feeds both surfaces.
 // router.refresh() from the settings form re-runs this and re-renders both.
 export default async function DashboardChrome({ user, children }: Props) {
-  const profile = await getUserProfile();
+  const [profile, plan] = await Promise.all([
+    getUserProfile(),
+    getUserPlan(),
+  ]);
   const displayName =
     profile?.displayName ?? user.email?.split("@")[0] ?? "User";
   const avatarUrl = profile?.avatarUrl ?? null;
+  const isPlus = plan.plan === "plus";
 
   return (
     <ChatProvider userId={user.id} email={user.email ?? null}>
@@ -43,6 +48,7 @@ export default async function DashboardChrome({ user, children }: Props) {
             <DashboardSidebar
               displayName={displayName}
               avatarUrl={avatarUrl}
+              isPlus={isPlus}
             />
             <div className="flex flex-1 flex-col overflow-hidden">
               <DashboardTopBar />

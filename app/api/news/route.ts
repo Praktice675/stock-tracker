@@ -16,6 +16,7 @@ type ResponseItem = {
   timestamp: number;
   ticker: string;
   summary?: string;
+  thumbnail: string | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
           timestamp: item.providerPublishTime,
           ticker,
           summary: item.summary,
+          thumbnail: item.thumbnail ?? null,
         });
       }
     }

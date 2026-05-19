@@ -455,3 +455,58 @@ body {
   .narrow-viewport-notice { display: block; }
 }
 
+/* Navbar ticker tape — pills scroll continuously like Bloomberg/CNBC.
+   The list is rendered twice back-to-back; translating the inner track by
+   -50% loops seamlessly. transform is GPU-accelerated so no layout thrash. */
+.ticker-tape {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.ticker-tape-inner {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  animation: ticker-scroll 60s linear infinite;
+  will-change: transform;
+}
+.ticker-tape-inner > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.ticker-tape:hover .ticker-tape-inner {
+  animation-play-state: paused;
+}
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.ticker-tape::before,
+.ticker-tape::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  z-index: 2;
+  pointer-events: none;
+}
+.ticker-tape::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-primary), transparent);
+}
+.ticker-tape::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-primary), transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-tape-inner { animation: none; }
+}
+

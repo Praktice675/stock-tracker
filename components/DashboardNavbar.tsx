@@ -292,30 +292,36 @@ export default function DashboardNavbar({
         />
       </Link>
 
-      {/* Ticker pills — scrollable horizontally if overflow */}
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: "flex",
-          alignItems: "center",
-          gap: "12px",
-          overflowX: "auto",
-          scrollbarWidth: "none",
-        }}
-        className="[&::-webkit-scrollbar]:hidden"
-      >
-        {NAV_TICKERS.map((ticker) => (
-          <TickerPill
-            key={ticker}
-            ticker={ticker}
-            quote={quotes[ticker]}
-            spark={sparks[ticker]}
-            onClick={() =>
-              router.push(`/dashboard?ticker=${encodeURIComponent(ticker)}`)
-            }
-          />
-        ))}
+      {/* Ticker tape — continuously scrolling pills, pauses on hover.
+          The list is rendered twice so the keyframes can loop seamlessly
+          by translating the inner track by -50%. Live-price polling and
+          click-to-select still work — animation is purely visual. */}
+      <div className="ticker-tape">
+        <div className="ticker-tape-inner">
+          {NAV_TICKERS.map((ticker) => (
+            <TickerPill
+              key={ticker}
+              ticker={ticker}
+              quote={quotes[ticker]}
+              spark={sparks[ticker]}
+              onClick={() =>
+                router.push(`/dashboard?ticker=${encodeURIComponent(ticker)}`)
+              }
+            />
+          ))}
+          {NAV_TICKERS.map((ticker) => (
+            <TickerPill
+              key={`dup-${ticker}`}
+              ticker={ticker}
+              quote={quotes[ticker]}
+              spark={sparks[ticker]}
+              ariaHidden
+              onClick={() =>
+                router.push(`/dashboard?ticker=${encodeURIComponent(ticker)}`)
+              }
+            />
+          ))}
+        </div>
       </div>
 
       {/* Utility cluster */}
@@ -578,11 +584,13 @@ function TickerPill({
   quote,
   spark,
   onClick,
+  ariaHidden,
 }: {
   ticker: string;
   quote: Quote | undefined;
   spark: number[] | undefined;
   onClick: () => void;
+  ariaHidden?: boolean;
 }) {
   const has = !!quote;
   const positive = has ? quote.changePercent >= 0 : true;
@@ -593,6 +601,8 @@ function TickerPill({
     <button
       type="button"
       onClick={onClick}
+      aria-hidden={ariaHidden}
+      tabIndex={ariaHidden ? -1 : undefined}
       style={{
         background: "var(--bg-elevated)",
         border: "1px solid var(--border)",

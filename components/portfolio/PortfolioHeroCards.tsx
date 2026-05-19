@@ -5,15 +5,12 @@ import { ArrowLeft, Info, Maximize2, TrendingUp } from "lucide-react";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
-  Cell,
-  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+import CompanyLogo from "@/components/markets/CompanyLogo";
 import Card from "@/components/ui/Card";
 import CountUp from "@/components/ui/CountUp";
 
@@ -32,18 +29,21 @@ export type HeroSnapshot = {
   takenAt: string;
 };
 
-export type MonthlyRealizedPoint = {
-  month: string;
-  monthIndex: number;
-  stocks: number;
+export type UnrealizedPosition = {
+  symbol: string;
+  quantity: number;
+  currentPrice: number;
+  avgCost: number;
+  costBasis: number;
+  pnl: number;
+  pnlPct: number;
 };
 
-export type RealizedPnlData = {
-  totalYtd: number;
-  byMonth: MonthlyRealizedPoint[];
-  hasData: boolean;
-  hasCrypto: boolean;
-  hasOther: boolean;
+export type UnrealizedPnlData = {
+  positions: UnrealizedPosition[];
+  totalPnl: number;
+  costBasis: number;
+  pct: number;
 };
 
 export type HeroData = {
@@ -62,22 +62,25 @@ export type HeroData = {
   distribution: HeroDistributionSegment[];
   // Performance chart points (full history; range filtered client-side)
   allSnapshots: HeroSnapshot[];
-  // Card C realized P&L (FIFO YTD)
-  realized: RealizedPnlData;
+  // Card C unrealized P&L (per-position MTM vs cost basis)
+  unrealized: UnrealizedPnlData;
 };
 
 type Props = {
   data: HeroData;
 };
 
-type ChartRange = "1D" | "1W" | "1M" | "3M" | "1Y";
-const RANGES: ChartRange[] = ["1D", "1W", "1M", "3M", "1Y"];
-const RANGE_MS: Record<ChartRange, number> = {
-  "1D": 24 * 60 * 60 * 1000,
-  "1W": 7 * 24 * 60 * 60 * 1000,
-  "1M": 30 * 24 * 60 * 60 * 1000,
-  "3M": 90 * 24 * 60 * 60 * 1000,
-  "1Y": 365 * 24 * 60 * 60 * 1000,
+type ChartRange = "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";
+const RANGES: ChartRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
+
+// API range param string for /api/portfolio/snapshot?range=...
+const RANGE_API_PARAM: Record<ChartRange, string> = {
+  "1D": "1d",
+  "1W": "1w",
+  "1M": "1m",
+  "3M": "3m",
+  "1Y": "1y",
+  ALL: "all",
 };
 
 // ---------------------------------------------------------------------------
@@ -115,30 +118,80 @@ const fmtSignedCurrency = (n: number): string => {
   })}`;
 };
 
-function dateTickFormatter(snapshots: HeroSnapshot[]) {
-  if (snapshots.length === 0) return (v: string) => v;
-  const first = new Date(snapshots[0].takenAt).getTime();
-  const last = new Date(snapshots[snapshots.length - 1].takenAt).getTime();
-  const days = (last - first) / (1000 * 60 * 60 * 24);
-  if (days <= 2) {
+// Filters out nulls / NaN epochs, sorts ASC by parsed epoch (not lexically),
+// and dedupes by exact takenAt — later values at the same timestamp win, so
+// the most recently inserted value is what the chart plots. This is what
+// guarantees the chart always renders left-to-right in real time order,
+// regardless of how the upstream API ordered its result.
+function normalizeSeries(snapshots: HeroSnapshot[]): HeroSnapshot[] {
+  const valid: HeroSnapshot[] = [];
+  for (const s of snapshots) {
+    if (!s || typeof s.takenAt !== "string") continue;
+    const epoch = new Date(s.takenAt).getTime();
+    if (!Number.isFinite(epoch)) continue;
+    if (typeof s.totalValue !== "number" || !Number.isFinite(s.totalValue)) {
+      continue;
+    }
+    valid.push(s);
+  }
+  valid.sort(
+    (a, b) => new Date(a.takenAt).getTime() - new Date(b.takenAt).getTime(),
+  );
+  const byKey = new Map<string, HeroSnapshot>();
+  for (const s of valid) byKey.set(s.takenAt, s);
+  return Array.from(byKey.values());
+}
+
+function dateTickFormatterFor(
+  range: ChartRange,
+  snapshots: HeroSnapshot[],
+) {
+  // Format X-axis ticks based on the active range so labels match the
+  // granularity of the data (intraday vs daily vs monthly).
+  if (range === "1D") {
+    // When 1D data crosses midnight in the user's local timezone, the
+    // hour-only label loses its date context — e.g. "3:49 PM, 1:22 PM"
+    // looks backwards even when sorted correctly. Prefix with the date
+    // in that case so the labels remain unambiguous left-to-right.
+    const spansMultipleDays =
+      snapshots.length >= 2 &&
+      new Date(snapshots[0].takenAt).toDateString() !==
+        new Date(snapshots[snapshots.length - 1].takenAt).toDateString();
     return (iso: string) => {
       const d = new Date(iso);
-      return Number.isNaN(d.getTime())
-        ? iso
-        : d.toLocaleTimeString("en-US", { hour: "numeric" });
+      if (Number.isNaN(d.getTime())) return iso;
+      if (spansMultipleDays) {
+        return d.toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+      }
+      return d.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
     };
   }
-  if (days <= 31) {
+  if (range === "1W" || range === "1M") {
     return (iso: string) => {
       const d = new Date(iso);
-      return Number.isNaN(d.getTime()) ? iso : String(d.getDate());
+      if (Number.isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
     };
   }
+  // 3M / 1Y / ALL → "May 2026"
   return (iso: string) => {
     const d = new Date(iso);
-    return Number.isNaN(d.getTime())
-      ? iso
-      : d.toLocaleDateString("en-US", { month: "short" });
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      year: "numeric",
+    });
   };
 }
 
@@ -191,7 +244,7 @@ export default function PortfolioHeroCards({ data }: Props) {
         onClearSymbol={() => setSelectedSymbol(null)}
         onChangeRange={setSelectedRange}
       />
-      <TotalProfitsCard data={data} />
+      <UnrealizedPnlCard data={data} />
     </div>
   );
 }
@@ -567,21 +620,41 @@ function PerformanceCard({
 
   const inSymbolMode = selectedSymbol != null;
 
-  // Portfolio snapshots filtered to the selected range
-  const filteredSnapshots = useMemo(() => {
-    if (allSnapshots.length === 0) return [];
-    const cutoff = Date.now() - RANGE_MS[selectedRange];
-    const filtered = allSnapshots.filter(
-      (s) => new Date(s.takenAt).getTime() >= cutoff,
-    );
-    // Always render at least the trailing 2 points if the user has any data,
-    // even if both fall outside the range (e.g. tiny 1D range with no recent
-    // ticks). Recharts looks dead with a single point.
-    if (filtered.length < 2 && allSnapshots.length >= 2) {
-      return allSnapshots.slice(-2);
-    }
-    return filtered;
-  }, [allSnapshots, selectedRange]);
+  // Server-provided snapshots are the initial render value so we don't show
+  // a flash of "loading" on first paint. Each range change kicks off a fresh
+  // fetch against the API which filters server-side by the selected window.
+  const [rangeSnapshots, setRangeSnapshots] = useState<HeroSnapshot[]>(
+    () => allSnapshots,
+  );
+  const [loadingRange, setLoadingRange] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingRange(true);
+    fetch(
+      `/api/portfolio/snapshot?range=${RANGE_API_PARAM[selectedRange]}`,
+      { cache: "no-store" },
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { points?: HeroSnapshot[] } | null) => {
+        if (cancelled) return;
+        const points = Array.isArray(json?.points) ? json.points : [];
+        setRangeSnapshots(
+          points.map((p) => ({
+            totalValue: Number(p.totalValue),
+            takenAt: p.takenAt,
+          })),
+        );
+        setLoadingRange(false);
+      })
+      .catch((err) => {
+        console.warn("portfolio snapshot range fetch failed:", err);
+        if (!cancelled) setLoadingRange(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRange]);
 
   return (
     <Card padding="24px" hoverable>
@@ -680,10 +753,14 @@ function PerformanceCard({
             pct={ytdChangePct}
             hasData={hasYtdChange}
             periodLabel={`in ${ytdLabel || "this year"}`}
-            placeholder="Tracking will begin shortly"
+            placeholder="Building history"
           />
 
-          <PortfolioPerformanceChart snapshots={filteredSnapshots} />
+          <PortfolioPerformanceChart
+            snapshots={rangeSnapshots}
+            range={selectedRange}
+            loading={loadingRange}
+          />
         </>
       )}
     </Card>
@@ -740,16 +817,27 @@ function RangePills({
 
 function PortfolioPerformanceChart({
   snapshots,
+  range,
+  loading,
 }: {
   snapshots: HeroSnapshot[];
+  range: ChartRange;
+  loading: boolean;
 }) {
-  const tickFmt = useMemo(() => dateTickFormatter(snapshots), [snapshots]);
+  // Defensive: never trust upstream order. Filter invalid rows, sort by real
+  // epoch, dedupe by takenAt — guarantees the chart's left-to-right axis is
+  // chronological even if the API/SSR shuffles data or returns dupes.
+  const series = useMemo(() => normalizeSeries(snapshots), [snapshots]);
+  const tickFmt = useMemo(
+    () => dateTickFormatterFor(range, series),
+    [range, series],
+  );
   const yDomain = useMemo(
-    () => zoomedYDomain(snapshots.map((s) => s.totalValue)),
-    [snapshots],
+    () => zoomedYDomain(series.map((s) => s.totalValue)),
+    [series],
   );
 
-  if (snapshots.length < 2) {
+  if (series.length < 2) {
     return (
       <div
         style={{
@@ -761,7 +849,9 @@ function PortfolioPerformanceChart({
           fontSize: "13px",
         }}
       >
-        Tracking will begin once you have multiple data points.
+        {loading
+          ? "Loading…"
+          : "Tracking will begin once you have multiple data points."}
       </div>
     );
   }
@@ -770,7 +860,7 @@ function PortfolioPerformanceChart({
     <div style={{ width: "100%", height: "240px" }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
-          data={snapshots}
+          data={series}
           margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
         >
           <defs>
@@ -815,8 +905,11 @@ function PortfolioPerformanceChart({
             domain={yDomain}
           />
           <Tooltip
-            content={<PerformanceTooltip />}
-            cursor={{ stroke: "rgba(255,255,255,0.12)" }}
+            content={<PerformanceTooltip range={range} />}
+            cursor={{
+              stroke: "var(--text-muted)",
+              strokeDasharray: "3 3",
+            }}
           />
           <Area
             type="monotone"
@@ -832,8 +925,10 @@ function PortfolioPerformanceChart({
   );
 }
 
-function PerformanceTooltip(props: TooltipShape) {
-  const { active, payload, label } = props;
+function PerformanceTooltip(
+  props: TooltipShape & { range?: ChartRange },
+) {
+  const { active, payload, label, range } = props;
   if (!active || !payload || payload.length === 0) return null;
   const raw = payload[0]?.value;
   const value = typeof raw === "number" ? raw : Number(raw);
@@ -841,11 +936,18 @@ function PerformanceTooltip(props: TooltipShape) {
   const d = new Date(String(label));
   const niceDate = Number.isNaN(d.getTime())
     ? String(label)
-    : d.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
+    : range === "1D"
+      ? d.toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : d.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
   return (
     <div
       style={{
@@ -859,7 +961,7 @@ function PerformanceTooltip(props: TooltipShape) {
       <div
         style={{
           color: "var(--text-muted)",
-          marginBottom: "2px",
+          marginBottom: "4px",
           fontFamily: "var(--font-mono), monospace",
         }}
       >
@@ -867,7 +969,11 @@ function PerformanceTooltip(props: TooltipShape) {
       </div>
       <div
         className="tabular-nums"
-        style={{ color: "var(--text-primary)", fontWeight: 600 }}
+        style={{
+          color: "var(--text-primary)",
+          fontWeight: 700,
+          fontFamily: "var(--font-mono), monospace",
+        }}
       >
         {fmtCurrency(value)}
       </div>
@@ -898,7 +1004,10 @@ function SymbolChart({
     let cancelled = false;
     setLoaded(false);
     setCandles(null);
-    fetch(`/api/candles/${symbol}?timeframe=${range}`, { cache: "no-store" })
+    // The candles API doesn't support "ALL" — fall back to the longest
+    // window it does support so the symbol drill-down still renders.
+    const tf = range === "ALL" ? "1Y" : range;
+    fetch(`/api/candles/${symbol}?timeframe=${tf}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (cancelled) return;
@@ -1180,23 +1289,41 @@ function SymbolTooltip({
 }
 
 // ---------------------------------------------------------------------------
-// Card C — Total Profits (realized YTD by month)
+// Card C — Unrealized P&L (mark-to-market vs cost basis per holding)
 // ---------------------------------------------------------------------------
 
-function TotalProfitsCard({ data }: { data: HeroData }) {
-  const { realized, totalValue } = data;
-  const positive = realized.totalYtd >= 0;
+function UnrealizedPnlCard({ data }: { data: HeroData }) {
+  const { unrealized } = data;
+  const hasPositions = unrealized.positions.length > 0;
+  const positive = unrealized.totalPnl >= 0;
+  const neutral = unrealized.totalPnl === 0;
   const pillBg = positive
     ? "color-mix(in srgb, var(--accent-green) 15%, transparent)"
     : "color-mix(in srgb, var(--accent-red) 15%, transparent)";
-  const color = positive ? "var(--accent-green)" : "var(--accent-red)";
+  const pillColor = neutral
+    ? "var(--text-muted)"
+    : positive
+      ? "var(--accent-green)"
+      : "var(--accent-red)";
+  const bigNumberColor = neutral
+    ? "var(--text-primary)"
+    : positive
+      ? "var(--accent-green)"
+      : "var(--accent-red)";
   const arrow = positive ? "↑" : "↓";
-  // pct relative to current portfolio value (closest proxy without a separate
-  // YTD cost basis). Zero when there's no portfolio to compare against.
-  const pct = totalValue > 0 ? (realized.totalYtd / totalValue) * 100 : 0;
+
+  // Sort: descending by |P&L| so the biggest movers (in either direction)
+  // get visual priority on the left.
+  const sorted = useMemo(
+    () =>
+      [...unrealized.positions].sort(
+        (a, b) => Math.abs(b.pnl) - Math.abs(a.pnl),
+      ),
+    [unrealized.positions],
+  );
 
   return (
-    <Card padding="24px" hoverable style={{ gridColumn: "1 / -1" }}>
+    <Card padding="24px" hoverable={false} style={{ gridColumn: "1 / -1" }}>
       <div
         style={{
           display: "flex",
@@ -1213,38 +1340,24 @@ function TotalProfitsCard({ data }: { data: HeroData }) {
               color: "var(--text-primary)",
             }}
           >
-            Total Profits
+            Unrealized P&L
           </span>
           <Info size={14} color="var(--text-muted)" aria-hidden="true" />
         </div>
-        <button
-          type="button"
-          aria-label="Open fullscreen"
-          title="Open fullscreen"
-          style={{
-            width: 24,
-            height: 24,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "transparent",
-            border: "1px solid var(--border)",
-            borderRadius: "6px",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            padding: 0,
-          }}
-        >
-          <Maximize2 size={14} aria-hidden="true" />
-        </button>
+        <Maximize2 size={14} color="var(--text-muted)" aria-hidden="true" />
       </div>
 
-      {!realized.hasData ? (
-        <EmptyState
-          text="No realized profits yet — make a trade to start tracking."
-          centered
-          large
-        />
+      {!hasPositions ? (
+        <div
+          style={{
+            fontSize: "14px",
+            color: "var(--text-muted)",
+            textAlign: "center",
+            padding: "32px 0",
+          }}
+        >
+          Connect a brokerage to see your P&L by holding.
+        </div>
       ) : (
         <>
           <div
@@ -1252,245 +1365,259 @@ function TotalProfitsCard({ data }: { data: HeroData }) {
             style={{
               fontSize: "28px",
               fontWeight: 700,
-              color: "var(--text-primary)",
+              color: bigNumberColor,
               letterSpacing: "-0.015em",
               marginBottom: "6px",
             }}
           >
-            <CountUp value={Math.abs(realized.totalYtd)} decimals={2} />
+            <CountUp
+              value={Math.abs(unrealized.totalPnl)}
+              decimals={2}
+              prefix={neutral ? "$" : positive ? "+$" : "-$"}
+            />
           </div>
 
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
               gap: "8px",
-              marginBottom: "20px",
+              marginBottom: "24px",
             }}
           >
-            <div
-              style={{ display: "flex", alignItems: "center", gap: "8px" }}
+            <span
+              className="font-mono tabular-nums"
+              style={{
+                background: pillBg,
+                color: pillColor,
+                padding: "3px 8px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 700,
+              }}
             >
-              <span
-                className="font-mono tabular-nums"
-                style={{
-                  background: pillBg,
-                  color,
-                  padding: "3px 8px",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                  fontWeight: 700,
-                }}
-              >
-                {arrow} {Math.abs(pct).toFixed(2)}%
-              </span>
-              <span
-                className="tabular-nums"
-                style={{ fontSize: "13px", color }}
-              >
-                {fmtSignedCurrency(realized.totalYtd)} in this year
-              </span>
-            </div>
-            <ProfitsLegend realized={realized} />
+              {arrow} {Math.abs(unrealized.pct).toFixed(2)}%
+            </span>
+            <span
+              className="tabular-nums"
+              style={{ fontSize: "13px", color: "var(--text-muted)" }}
+            >
+              Total cost: {fmtCurrency(unrealized.costBasis)}
+            </span>
           </div>
 
-          <ProfitsBarChart byMonth={realized.byMonth} />
+          <UnrealizedPnlList positions={sorted} />
         </>
       )}
     </Card>
   );
 }
 
-function ProfitsLegend({ realized }: { realized: RealizedPnlData }) {
-  const items: Array<{ color: string; label: string }> = [];
-  if (realized.byMonth.some((m) => m.stocks !== 0)) {
-    items.push({ color: "var(--accent)", label: "Stocks" });
-  }
-  if (realized.hasCrypto) {
-    items.push({ color: "var(--accent-green)", label: "Crypto" });
-  }
-  if (realized.hasOther) {
-    items.push({ color: "var(--text-muted)", label: "Other" });
-  }
-  if (items.length === 0) return null;
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        fontSize: "11px",
-        color: "var(--text-muted)",
-      }}
-    >
-      {items.map((it) => (
-        <span
-          key={it.label}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: it.color,
-              display: "inline-block",
-            }}
-            aria-hidden="true"
-          />
-          {it.label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function ProfitsBarChart({
-  byMonth,
+function UnrealizedPnlList({
+  positions,
 }: {
-  byMonth: MonthlyRealizedPoint[];
+  positions: UnrealizedPosition[];
 }) {
-  if (byMonth.length === 0) return null;
-  return (
-    <div style={{ width: "100%", height: "240px" }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={byMonth}
-          margin={{ top: 24, right: 4, bottom: 0, left: 0 }}
-        >
-          <XAxis
-            dataKey="month"
-            tick={{
-              fill: "var(--text-muted)",
-              fontSize: 11,
-              fontFamily: "var(--font-mono), monospace",
-            }}
-            axisLine={false}
-            tickLine={false}
-            interval={0}
-          />
-          <YAxis hide domain={["auto", "auto"]} />
-          <Tooltip
-            cursor={{ fill: "rgba(255,255,255,0.04)" }}
-            content={<ProfitsTooltip />}
-          />
-          <Bar
-            dataKey="stocks"
-            fill="var(--accent)"
-            radius={[4, 4, 0, 0]}
-            isAnimationActive={false}
-          >
-            <LabelList
-              dataKey="stocks"
-              position="top"
-              content={(props) => {
-                const { x, y, width, value } = props as {
-                  x?: number;
-                  y?: number;
-                  width?: number;
-                  value?: number;
-                };
-                if (
-                  typeof x !== "number" ||
-                  typeof y !== "number" ||
-                  typeof width !== "number" ||
-                  typeof value !== "number"
-                ) {
-                  return null;
-                }
-                return (
-                  <text
-                    x={x + width / 2}
-                    y={y - 6}
-                    textAnchor="middle"
-                    fill="var(--text-primary)"
-                    fontSize={11}
-                    fontFamily="var(--font-mono), monospace"
-                    style={{ fontVariantNumeric: "tabular-nums" }}
-                  >
-                    {fmtCurrencyShort(value)}
-                  </text>
-                );
-              }}
-            />
-            {byMonth.map((m, i) => (
-              <Cell
-                key={`profit-cell-${m.monthIndex}-${i}`}
-                fill={
-                  m.stocks >= 0
-                    ? "var(--accent)"
-                    : "var(--accent-red)"
-                }
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+  // Largest |P&L| anchors each row's relative bar — biggest mover fills
+  // its full half, everyone else scales down from that.
+  const maxAbsPnl = positions.reduce(
+    (m, p) => Math.max(m, Math.abs(p.pnl)),
+    0,
   );
-}
 
-function ProfitsTooltip(props: TooltipShape) {
-  const { active, payload, label } = props;
-  if (!active || !payload || payload.length === 0) return null;
-  const raw = payload[0]?.value;
-  const value = typeof raw === "number" ? raw : Number(raw);
-  if (!Number.isFinite(value)) return null;
   return (
-    <div
-      style={{
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--border)",
-        borderRadius: "8px",
-        padding: "10px",
-        fontSize: "12px",
-        minWidth: "160px",
-      }}
-    >
+    <div style={{ marginTop: "20px" }}>
       <div
+        className="font-mono uppercase"
         style={{
+          fontSize: "12px",
+          fontWeight: 600,
+          letterSpacing: "0.15em",
           color: "var(--text-muted)",
-          marginBottom: "6px",
-          fontFamily: "var(--font-mono), monospace",
+          marginBottom: "12px",
         }}
       >
-        {String(label ?? "")} • realized
+        By holding
       </div>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {positions.map((p, i) => (
+          <UnrealizedPnlListRow
+            key={p.symbol}
+            position={p}
+            maxAbsPnl={maxAbsPnl}
+            isLast={i === positions.length - 1}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UnrealizedPnlListRow({
+  position,
+  maxAbsPnl,
+  isLast,
+}: {
+  position: UnrealizedPosition;
+  maxAbsPnl: number;
+  isLast: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const positive = position.pnl > 0;
+  const negative = position.pnl < 0;
+  const zero = position.pnl === 0;
+  const valueColor = zero
+    ? "var(--text-muted)"
+    : positive
+      ? "var(--accent-green)"
+      : "var(--accent-red)";
+
+  // Each side of the bar can fill up to 50% of the container; the biggest
+  // mover anchors that ceiling, everyone else scales down proportionally.
+  const ratio = maxAbsPnl > 0 ? Math.abs(position.pnl) / maxAbsPnl : 0;
+  const halfPct = Math.min(50, ratio * 50);
+
+  const sharesLine = `${formatQuantity(position.quantity)} ${
+    position.quantity === 1 ? "share" : "shares"
+  } @ ${fmtCurrency(position.avgCost)} avg`;
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "32px 1fr 1fr auto",
+        gap: "14px",
+        alignItems: "center",
+        padding: "14px 0",
+        borderBottom: isLast ? "none" : "1px solid var(--border)",
+        background: hovered
+          ? "color-mix(in srgb, var(--bg-elevated) 50%, transparent)"
+          : "transparent",
+        transition: "background-color 100ms ease-out",
+      }}
+    >
+      <div>
+        <CompanyLogo ticker={position.symbol} size={28} />
+      </div>
+
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          gap: "8px",
+          flexDirection: "column",
+          gap: "2px",
+          minWidth: 0,
         }}
       >
         <span
+          className="font-mono"
           style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: "var(--accent)",
-          }}
-          aria-hidden="true"
-        />
-        <span style={{ color: "var(--text-muted)" }}>Stocks</span>
-        <span
-          className="tabular-nums"
-          style={{
+            fontSize: "13px",
+            fontWeight: 700,
             color: "var(--text-primary)",
-            fontWeight: 600,
-            marginLeft: "auto",
           }}
         >
-          {fmtSignedCurrency(value)}
+          {position.symbol}
+        </span>
+        <span
+          className="tabular-nums"
+          style={{ fontSize: "11px", color: "var(--text-muted)" }}
+        >
+          {sharesLine}
+        </span>
+      </div>
+
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          minWidth: "100px",
+          maxWidth: "180px",
+          height: "6px",
+          background: "var(--bg-elevated)",
+          borderRadius: "3px",
+          overflow: "hidden",
+        }}
+        aria-hidden="true"
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: 0,
+            width: "1px",
+            height: "100%",
+            background: "var(--border)",
+          }}
+        />
+        {positive && (
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: 0,
+              height: "100%",
+              width: `${halfPct}%`,
+              background: "var(--accent-green)",
+              borderRadius: "0 3px 3px 0",
+            }}
+          />
+        )}
+        {negative && (
+          <div
+            style={{
+              position: "absolute",
+              right: "50%",
+              top: 0,
+              height: "100%",
+              width: `${halfPct}%`,
+              background: "var(--accent-red)",
+              borderRadius: "3px 0 0 3px",
+            }}
+          />
+        )}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "2px",
+          alignItems: "flex-end",
+        }}
+      >
+        <span
+          className="font-mono tabular-nums"
+          style={{
+            fontSize: "13px",
+            fontWeight: 700,
+            color: valueColor,
+          }}
+        >
+          {zero ? "$0.00" : fmtSignedCurrency(position.pnl)}
+        </span>
+        <span
+          className="tabular-nums"
+          style={{ fontSize: "11px", color: valueColor }}
+        >
+          {zero
+            ? "0.00%"
+            : `${position.pnlPct >= 0 ? "+" : "-"}${Math.abs(
+                position.pnlPct,
+              ).toFixed(2)}%`}
         </span>
       </div>
     </div>
   );
+}
+
+function formatQuantity(q: number): string {
+  if (Number.isInteger(q)) return q.toLocaleString("en-US");
+  return q.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 4,
+  });
 }
 
 // ---------------------------------------------------------------------------

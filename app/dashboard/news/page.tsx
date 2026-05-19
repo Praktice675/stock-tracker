@@ -1,29 +1,71 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import DashboardChrome from "@/components/DashboardChrome";
-import NewsFeed from "@/components/news/NewsFeed";
+import NewsClient, {
+  type NewsTab,
+} from "@/components/news/NewsClient";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewsPage() {
+// Default "market news" basket used by the All tab and the Trending Stories
+// sidebar. We avoid making this user-specific so the All tab feels like a
+// market view rather than a personalised feed.
+const ALL_TAB_TICKERS = [
+  "SPY",
+  "QQQ",
+  "AAPL",
+  "MSFT",
+  "NVDA",
+  "TSLA",
+  "META",
+  "GOOG",
+  "AMZN",
+];
+
+function parseTab(raw: string | string[] | undefined): NewsTab {
+  if (raw === "holdings") return "holdings";
+  if (raw === "watchlist") return "watchlist";
+  return "all";
+}
+
+export default async function NewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) {
     redirect("/auth/login");
   }
 
-  const { data: rows } = await supabase
-    .from("watchlist_items")
-    .select("ticker, position")
-    .order("position", { ascending: true });
+  const [watchlistRes, positionsRes] = await Promise.all([
+    supabase
+      .from("watchlist_items")
+      .select("ticker, position")
+      .eq("user_id", user.id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("brokerage_positions")
+      .select("symbol")
+      .eq("user_id", user.id),
+  ]);
 
-  const tickers = (rows ?? [])
+  const watchlistTickers = (watchlistRes.data ?? [])
     .map((r) => (typeof r.ticker === "string" ? r.ticker : null))
     .filter((t): t is string => !!t);
+  const holdingsTickers = Array.from(
+    new Set(
+      (positionsRes.data ?? [])
+        .map((r) => (typeof r.symbol === "string" ? r.symbol : null))
+        .filter((t): t is string => !!t),
+    ),
+  );
+
+  const params = await searchParams;
+  const initialTab = parseTab(params?.tab);
 
   return (
     <DashboardChrome user={user}>
@@ -31,68 +73,13 @@ export default async function NewsPage() {
         className="flex w-full flex-col overflow-y-auto"
         style={{ padding: "24px 24px 48px" }}
       >
-        {tickers.length === 0 ? (
-          <EmptyWatchlist />
-        ) : (
-          <NewsFeed watchlistTickers={tickers} />
-        )}
+        <NewsClient
+          initialTab={initialTab}
+          allTickers={ALL_TAB_TICKERS}
+          holdingsTickers={holdingsTickers}
+          watchlistTickers={watchlistTickers}
+        />
       </div>
     </DashboardChrome>
-  );
-}
-
-function EmptyWatchlist() {
-  return (
-    <div
-      className="flex w-full items-center justify-center"
-      style={{ minHeight: "60vh" }}
-    >
-      <div
-        className="flex flex-col items-center"
-        style={{ gap: "16px", maxWidth: "440px", textAlign: "center" }}
-      >
-        <h1
-          style={{
-            fontFamily: "var(--font-mono), monospace",
-            fontSize: "22px",
-            fontWeight: 800,
-            letterSpacing: "-0.015em",
-            color: "var(--text-primary)",
-            margin: 0,
-          }}
-        >
-          No watchlist yet
-        </h1>
-        <p
-          className="text-text-muted"
-          style={{
-            fontSize: "13px",
-            letterSpacing: "-0.015em",
-            lineHeight: 1.5,
-            margin: 0,
-          }}
-        >
-          Add stocks to your watchlist to see news here.
-        </p>
-        <Link
-          href="/dashboard"
-          className="font-mono font-bold uppercase"
-          style={{
-            marginTop: "12px",
-            padding: "14px 28px",
-            fontSize: "13px",
-            letterSpacing: "0.2em",
-            backgroundColor: "var(--accent)",
-            color: "rgb(var(--color-black))",
-            border: "none",
-            borderRadius: "var(--border-radius)",
-            textDecoration: "none",
-            display: "inline-block",
-          }}
-        >
-          Go to Markets
-        </Link>
-      </div>
-    </div>
   );
 }
