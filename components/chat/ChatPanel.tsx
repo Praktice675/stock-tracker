@@ -1,18 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Send, X } from "lucide-react";
+import { Lock, Send, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { useChatContext } from "@/components/chat/ChatProvider";
 import {
   loadMessages,
   saveMessages,
   type ChatMessage,
 } from "@/lib/chat/storage";
 
-const SUGGESTIONS = [
-  "How's my portfolio doing?",
-  "What's happening with NVDA?",
-  "Earnings this week?",
+// Plus-only chips appear active for paid users and locked-with-checkout-link
+// for free users — making the gap to upgrade visible exactly where it bites.
+const PLUS_CHIPS = [
+  "Analyze my portfolio",
+  "What's my biggest risk?",
+  "Why did I drop today?",
+  "How does my portfolio compare to the S&P 500?",
+  "Suggest 3 hedges based on my holdings",
+];
+
+const FREE_CHIPS = [
+  "Explain P/E ratio",
+  "What's a good beginner stock?",
+  "How do dividends work?",
 ];
 
 type Props = {
@@ -47,12 +58,33 @@ function formatTime(ts: number): string {
 }
 
 export default function ChatPanel({ userId, onClose }: Props) {
+  const { isPlus } = useChatContext();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rateLimitHit, setRateLimitHit] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  async function openCheckout() {
+    if (checkoutLoading) return;
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", { method: "POST" });
+      const json = (await res.json()) as { url?: string; error?: string };
+      if (json.url) {
+        window.location.href = json.url;
+        return;
+      }
+      alert(json.error ?? "Checkout failed");
+    } catch {
+      alert("Network error — please try again.");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
 
   useEffect(() => {
     setMessages(loadMessages(userId));
@@ -102,7 +134,21 @@ export default function ChatPanel({ userId, onClose }: Props) {
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => null);
+        const errData = (await res.json().catch(() => null)) as
+          | { error?: string; upgrade?: boolean }
+          | null;
+        if (res.status === 429 && errData?.upgrade) {
+          // Roll back the optimistic user message — the upgrade card now
+          // takes the place of the would-be assistant reply.
+          setMessages((prev) =>
+            prev.length > 0 && prev[prev.length - 1] === userMsg
+              ? prev.slice(0, -1)
+              : prev,
+          );
+          setInput(trimmed);
+          setRateLimitHit(true);
+          return;
+        }
         setError(
           (errData && typeof errData.error === "string"
             ? errData.error
@@ -110,6 +156,7 @@ export default function ChatPanel({ userId, onClose }: Props) {
         );
         return;
       }
+      setRateLimitHit(false);
 
       const data = await res.json();
       const respMessages = Array.isArray(data?.messages)
@@ -217,12 +264,23 @@ export default function ChatPanel({ userId, onClose }: Props) {
           scrollbarWidth: "thin",
         }}
       >
-        {messages.length === 0 && !loading ? (
-          <EmptyState onPick={sendMessage} />
+        {messages.length === 0 && !loading && !rateLimitHit ? (
+          <EmptyState
+            isPlus={isPlus}
+            onPick={sendMessage}
+            onUpgrade={openCheckout}
+            checkoutLoading={checkoutLoading}
+          />
         ) : (
           messages.map((m, i) => <Bubble key={i} message={m} />)
         )}
         {loading && <Thinking />}
+        {rateLimitHit && (
+          <UpgradeCard
+            onUpgrade={openCheckout}
+            loading={checkoutLoading}
+          />
+        )}
         {error && (
           <div
             style={{
@@ -412,7 +470,17 @@ function Thinking() {
   );
 }
 
-function EmptyState({ onPick }: { onPick: (s: string) => void }) {
+function EmptyState({
+  isPlus,
+  onPick,
+  onUpgrade,
+  checkoutLoading,
+}: {
+  isPlus: boolean;
+  onPick: (s: string) => void;
+  onUpgrade: () => void;
+  checkoutLoading: boolean;
+}) {
   return (
     <div
       style={{
@@ -446,42 +514,181 @@ function EmptyState({ onPick }: { onPick: (s: string) => void }) {
           lineHeight: 1.5,
         }}
       >
-        Ask about your portfolio, markets, or any stock.
+        {isPlus
+          ? "Ask about your portfolio, markets, or any stock."
+          : "Ask about investing concepts, or unlock portfolio-aware analysis with Plus."}
       </p>
+
       <div
         style={{
           display: "flex",
-          flexDirection: "column",
+          flexWrap: "wrap",
           gap: "8px",
           marginTop: "16px",
           width: "100%",
+          justifyContent: "center",
         }}
       >
-        {SUGGESTIONS.map((s, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => onPick(s)}
-            className="chat-suggestion"
-            style={{
-              padding: "10px 14px",
-              backgroundColor: "rgba(255, 255, 255, 0.03)",
-              border: "1px solid #27272a",
-              borderRadius: "8px",
-              color: "var(--text-primary)",
-              fontSize: "12.5px",
-              textAlign: "left",
-              cursor: "pointer",
-              fontFamily: "var(--font-mono), monospace",
-              letterSpacing: "-0.015em",
-              transition:
-                "border-color 150ms ease, background-color 150ms ease",
-            }}
-          >
-            {s}
-          </button>
-        ))}
+        {isPlus
+          ? PLUS_CHIPS.map((s) => (
+              <Chip key={s} label={s} onClick={() => onPick(s)} />
+            ))
+          : (
+              <>
+                {FREE_CHIPS.map((s) => (
+                  <Chip key={s} label={s} onClick={() => onPick(s)} />
+                ))}
+                {PLUS_CHIPS.slice(0, 3).map((s) => (
+                  <Chip
+                    key={`locked-${s}`}
+                    label={s}
+                    locked
+                    disabled={checkoutLoading}
+                    onClick={onUpgrade}
+                  />
+                ))}
+                <Chip
+                  key="upgrade"
+                  label="Upgrade to analyze your portfolio →"
+                  variant="upgrade"
+                  disabled={checkoutLoading}
+                  onClick={onUpgrade}
+                />
+              </>
+            )}
       </div>
+    </div>
+  );
+}
+
+type ChipVariant = "default" | "upgrade";
+
+function Chip({
+  label,
+  onClick,
+  locked,
+  disabled,
+  variant = "default",
+}: {
+  label: string;
+  onClick: () => void;
+  locked?: boolean;
+  disabled?: boolean;
+  variant?: ChipVariant;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  const isUpgrade = variant === "upgrade";
+  const baseBorder = locked
+    ? "1px solid var(--border)"
+    : isUpgrade
+      ? "1px solid var(--accent)"
+      : "1px solid var(--border)";
+  const hoverBorder = locked
+    ? "1px solid var(--text-muted)"
+    : "1px solid var(--accent)";
+  const baseColor = locked
+    ? "var(--text-muted)"
+    : isUpgrade
+      ? "var(--accent)"
+      : "var(--text-primary)";
+  const hoverColor = locked ? "var(--text-primary)" : "var(--accent)";
+  const background = isUpgrade
+    ? "color-mix(in srgb, var(--accent) 15%, transparent)"
+    : "transparent";
+
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "8px 14px",
+        borderRadius: 999,
+        border: hovered ? hoverBorder : baseBorder,
+        background,
+        color: hovered ? hoverColor : baseColor,
+        fontSize: "13px",
+        cursor: disabled ? "wait" : "pointer",
+        opacity: locked ? 0.65 : disabled ? 0.7 : 1,
+        transition: "color 120ms ease, border-color 120ms ease",
+        fontFamily: "inherit",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {locked && <Lock size={12} aria-hidden="true" />}
+      {label}
+    </button>
+  );
+}
+
+function UpgradeCard({
+  onUpgrade,
+  loading,
+}: {
+  onUpgrade: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div
+      role="alert"
+      style={{
+        padding: "20px",
+        borderRadius: "12px",
+        background:
+          "color-mix(in srgb, var(--accent) 8%, var(--bg-elevated))",
+        border: "1px solid var(--accent)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "16px",
+          fontWeight: 700,
+          color: "var(--text-primary)",
+        }}
+      >
+        Daily limit reached
+      </div>
+      <div
+        style={{
+          fontSize: "14px",
+          color: "var(--text-muted)",
+          lineHeight: 1.5,
+        }}
+      >
+        You&apos;ve used all 10 free messages today. Upgrade to Pulse Plus
+        for unlimited chat plus portfolio-aware analysis.
+      </div>
+      <button
+        type="button"
+        onClick={onUpgrade}
+        disabled={loading}
+        className="font-mono uppercase"
+        style={{
+          alignSelf: "flex-start",
+          marginTop: "4px",
+          padding: "9px 18px",
+          borderRadius: "8px",
+          background: "var(--accent)",
+          color: "var(--text-primary)",
+          fontSize: "11px",
+          fontWeight: 700,
+          letterSpacing: "0.1em",
+          border: "none",
+          cursor: loading ? "wait" : "pointer",
+          opacity: loading ? 0.7 : 1,
+        }}
+      >
+        {loading ? "Loading…" : "Upgrade to Plus"}
+      </button>
     </div>
   );
 }

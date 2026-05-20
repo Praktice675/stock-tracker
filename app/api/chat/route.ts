@@ -1,6 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { TOOLS, executeTool } from "@/lib/ai/tools";
+import {
+  getPortfolioContext,
+  portfolioContextToPrompt,
+} from "@/lib/chat/portfolio-context";
+import { getUserPlan } from "@/lib/subscription";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -8,9 +13,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const MAX_ITERATIONS = 5;
-const DAILY_MESSAGE_LIMIT = 100;
+const FREE_DAILY_MESSAGE_LIMIT = 10;
 
-const SYSTEM_PROMPT_BASE = `You are Pulse, an AI assistant embedded in a stock dashboard called Pulse. You help users understand their portfolio and the markets.
+const SYSTEM_PROMPT_BASE_PLUS = `You are Pulse, an AI assistant embedded in a stock dashboard called Pulse. You help users understand their portfolio and the markets.
 
 Tools available — use them aggressively to ground your answers in real data:
 - get_portfolio_summary: user's holdings, P&L, allocation
@@ -24,6 +29,7 @@ Tools available — use them aggressively to ground your answers in real data:
 
 Guidelines:
 - ALWAYS use tools when the user asks about anything specific — their portfolio, a stock's current price, news, etc. Never guess or use stale info.
+- The user's portfolio summary is included below for quick reference. Treat it as the source of truth for what they hold — call get_portfolio_summary only if you need a recompute.
 - Be concise. 2-4 sentences for most answers. Bullet points for lists.
 - Use plain numbers like "$120,000" not "$120K" unless space-constrained.
 - When discussing the user's positions, reference their actual data: "Your AAPL position is up 14% from your $20 avg cost" not generic "AAPL is up."
@@ -31,6 +37,19 @@ Guidelines:
 - If asked for investment advice, give educational framing (factors to consider) not directives ("buy" / "sell").
 - If a tool fails or returns no data, say so honestly. Don't make things up.
 - Format dollar amounts with commas, percentages with 1-2 decimals.`;
+
+const SYSTEM_PROMPT_BASE_FREE = `You are Pulse, an AI assistant embedded in a stock dashboard called Pulse.
+
+You can answer general investing and market questions — concepts (P/E, dividends, options, ETFs), how-tos, and educational background.
+
+Limits on this conversation:
+- You do NOT have access to the user's portfolio data or live ticker tools right now.
+- If the user asks about their specific positions, performance, P&L, sector exposure, or live prices, briefly explain that portfolio-aware analysis and live data lookups are Pulse Plus features, and offer to answer the educational/conceptual side of their question.
+- Never invent specific dollar amounts, prices, or P&L numbers for the user — you genuinely don't know them in this conversation.
+
+Style:
+- Be concise. 2-4 sentences for most answers. Bullet points for lists.
+- If asked for investment advice, give educational framing (factors to consider), never directives ("buy" / "sell").`;
 
 export async function POST(request: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -52,28 +71,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Daily quota gate. Read via the user's own session (RLS allows SELECT on
-  // chat_usage), enforce in the route. Counter increments happen below via
-  // the service-role client after a successful Anthropic call.
+  const plan = await getUserPlan();
+  const isPlus = plan.plan === "plus";
+
+  // Daily quota gate — applies to Free only. Plus subscribers are unlimited.
+  // Counter increments still happen below for analytics (so we track active
+  // Plus usage too), but the gate above only fires for Free.
   const today = new Date().toISOString().slice(0, 10);
-  const { data: usageRow, error: usageErr } = await supabase
-    .from("chat_usage")
-    .select("message_count")
-    .eq("user_id", user.id)
-    .eq("usage_date", today)
-    .maybeSingle();
-  if (usageErr) {
-    console.warn("/api/chat: usage read failed:", usageErr.message);
-  }
-  const currentCount = usageRow?.message_count ?? 0;
-  if (currentCount >= DAILY_MESSAGE_LIMIT) {
-    return NextResponse.json(
-      {
-        error: "Daily message limit reached. Resets at midnight UTC.",
-        limit: DAILY_MESSAGE_LIMIT,
-      },
-      { status: 429 },
-    );
+  if (!isPlus) {
+    const { data: usageRow, error: usageErr } = await supabase
+      .from("chat_usage")
+      .select("message_count")
+      .eq("user_id", user.id)
+      .eq("usage_date", today)
+      .maybeSingle();
+    if (usageErr) {
+      console.warn("/api/chat: usage read failed:", usageErr.message);
+    }
+    const currentCount = usageRow?.message_count ?? 0;
+    if (currentCount >= FREE_DAILY_MESSAGE_LIMIT) {
+      return NextResponse.json(
+        {
+          error: "Daily limit reached",
+          limit: FREE_DAILY_MESSAGE_LIMIT,
+          upgrade: true,
+        },
+        { status: 429 },
+      );
+    }
   }
 
   const body = await request.json().catch(() => null);
@@ -88,9 +113,32 @@ export async function POST(request: NextRequest) {
     content: typeof m.content === "string" ? m.content : m.content,
   }));
 
-  const systemPrompt =
-    SYSTEM_PROMPT_BASE +
-    `\n\nToday's date is ${new Date().toISOString().slice(0, 10)}.`;
+  // System prompt:
+  //   - Plus: portfolio data injected up-front + all tools enabled
+  //   - Free: no portfolio data, no tools, polite gate-pitch for portfolio Qs
+  const todayIso = new Date().toISOString().slice(0, 10);
+  let systemPrompt: string;
+  if (isPlus) {
+    let portfolioBlock = "";
+    try {
+      const ctx = await getPortfolioContext();
+      if (ctx) {
+        portfolioBlock = `\n\n--- USER PORTFOLIO ---\n${portfolioContextToPrompt(ctx)}\n--- END PORTFOLIO ---`;
+      }
+    } catch (err) {
+      console.warn(
+        "/api/chat: portfolio context build failed (continuing without):",
+        err instanceof Error ? err.message : err,
+      );
+    }
+    systemPrompt =
+      SYSTEM_PROMPT_BASE_PLUS +
+      portfolioBlock +
+      `\n\nToday's date is ${todayIso}.`;
+  } else {
+    systemPrompt =
+      SYSTEM_PROMPT_BASE_FREE + `\n\nToday's date is ${todayIso}.`;
+  }
 
   try {
     for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
@@ -98,7 +146,8 @@ export async function POST(request: NextRequest) {
         model: "claude-sonnet-4-5-20250929",
         max_tokens: 2048,
         system: systemPrompt,
-        tools: TOOLS,
+        // Only Plus gets tool access — Free conversations are concept-only.
+        ...(isPlus ? { tools: TOOLS } : {}),
         messages,
       });
 

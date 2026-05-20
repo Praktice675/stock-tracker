@@ -34,7 +34,7 @@ export default async function DashboardChrome({ user, children }: Props) {
   const isPlus = plan.plan === "plus";
 
   return (
-    <ChatProvider userId={user.id} email={user.email ?? null}>
+    <ChatProvider userId={user.id} email={user.email ?? null} isPlus={isPlus}>
       <SidebarStateProvider>
         {/* No bg-bg-primary on the root — body's radial-gradient backdrop
             shows through. Chrome strips/sidebar are transparent too. */}

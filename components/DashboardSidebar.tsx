@@ -283,7 +283,7 @@ export default function DashboardSidebar({
                 marginBottom: "2px",
               }}
             >
-              Upgrade to Pulse Plus
+              Unlock Pulse Plus
             </div>
             <div
               style={{
@@ -293,7 +293,8 @@ export default function DashboardSidebar({
                 marginBottom: "10px",
               }}
             >
-              Unlock real-time data + unlimited AI chat
+              Portfolio-aware AI, unlimited chat, smart insights — all for
+              $10/mo.
             </div>
             <button
               type="button"
